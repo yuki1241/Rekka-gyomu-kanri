@@ -1,0 +1,136 @@
+================================================================
+  業務管理システム セットアップガイド
+================================================================
+
+必要な外部サービス（すべて無料で使えます）
+  1. Google Cloud Console  → Googleログイン + カレンダー連携
+  2. Supabase              → データベース（タスク保存）
+  3. Vercel               → オンライン公開
+
+================================================================
+  STEP 1 : Google Cloud Console の設定
+================================================================
+
+1. https://console.cloud.google.com/ にアクセス
+
+2. 新しいプロジェクトを作成
+   （例：gyomu-kanri）
+
+3. 左メニュー → 「APIとサービス」→「ライブラリ」
+   →「Google Calendar API」を検索して「有効にする」
+
+4. 左メニュー → 「APIとサービス」→「認証情報」
+   → 「認証情報を作成」→「OAuth クライアント ID」
+
+5. アプリケーションの種類：「ウェブ アプリケーション」
+
+6. 承認済みのリダイレクト URI に以下を追加：
+   http://localhost:3000/api/auth/callback/google
+   （Vercel公開後は https://あなたのドメイン/api/auth/callback/google も追加）
+
+7. 作成後に表示される
+   「クライアントID」と「クライアントシークレット」をメモ
+
+================================================================
+  STEP 2 : Supabase の設定
+================================================================
+
+1. https://supabase.com にアクセスして無料アカウント作成
+
+2. 「New project」でプロジェクトを作成
+   （名前：gyomu-kanri、パスワードはメモしておく）
+
+3. 作成完了後、左メニュー「SQL Editor」を開く
+
+4. 以下のSQLをコピーして実行（Runボタンを押す）：
+
+-------- ここからSQLをコピー --------
+CREATE TABLE tasks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  priority TEXT DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low')),
+  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
+  due_date DATE,
+  user_email TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+-------- ここまで --------
+
+5. 左メニュー「Settings」→「API」で以下をメモ：
+   - Project URL（例：https://xxxxxxxxxx.supabase.co）
+   - anon/public キー
+   - service_role キー（「Reveal」ボタンで表示）
+
+================================================================
+  STEP 3 : 環境変数ファイルを作成
+================================================================
+
+C:\Users\mumyu\gyomu-kanri フォルダに
+「.env.local」という名前のファイルを新規作成して
+以下の内容を入力（値はSTEP1・2でメモしたものに書き換える）：
+
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=（32文字以上のランダムな文字列）
+GOOGLE_CLIENT_ID=（STEP1でメモしたクライアントID）
+GOOGLE_CLIENT_SECRET=（STEP1でメモしたシークレット）
+NEXT_PUBLIC_SUPABASE_URL=（STEP2でメモしたProject URL）
+NEXT_PUBLIC_SUPABASE_ANON_KEY=（STEP2でメモしたanonキー）
+SUPABASE_SERVICE_ROLE_KEY=（STEP2でメモしたservice_roleキー）
+
+★ NEXTAUTH_SECRET の作り方（コマンドプロンプトで実行）：
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+================================================================
+  STEP 4 : ローカルで動作確認
+================================================================
+
+コマンドプロンプトで：
+  cd C:\Users\mumyu\gyomu-kanri
+  npm install
+  npm run dev
+
+ブラウザで http://localhost:3000 を開く
+→ ログイン画面が表示される
+→「Googleでサインイン」でログイン
+
+================================================================
+  STEP 5 : Vercel でオンライン公開
+================================================================
+
+1. https://github.com でアカウント作成（未登録の場合）
+
+2. https://github.com/new でリポジトリ作成
+   （名前：gyomu-kanri、Privateを推奨）
+
+3. コマンドプロンプトで：
+   cd C:\Users\mumyu\gyomu-kanri
+   git init
+   git add .
+   git commit -m "initial commit"
+   git remote add origin https://github.com/あなたのユーザー名/gyomu-kanri.git
+   git push -u origin main
+
+4. https://vercel.com にアクセス（GitHubアカウントでログイン）
+
+5. 「New Project」→ GitHubのリポジトリを選択 → Import
+
+6. 「Environment Variables」に STEP3 と同じ環境変数を入力
+   ※ NEXTAUTH_URL だけ https://あなたのVercelドメイン に変える
+
+7. 「Deploy」ボタンを押す → 公開完了！
+
+8. Google Cloud ConsoleのリダイレクトURIに
+   https://あなたのVercelドメイン/api/auth/callback/google を追加
+
+================================================================
+  完了後にできること
+================================================================
+  ✓ Googleアカウントでログイン・ログアウト
+  ✓ タスクの作成・編集・削除（Supabaseに保存）
+  ✓ スケジュール画面でGoogleカレンダーを表示
+  ✓ どの端末からも同じデータにアクセス
+  ✓ チームメンバーは各自Googleアカウントでログイン可能
+
+================================================================
