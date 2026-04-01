@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Task, Priority, TaskStatus } from '@/app/tasks/page'
+import DriveFiles from '@/components/DriveFiles'
 
 interface TaskModalProps {
   task?: Task | null
@@ -16,6 +17,8 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'medium')
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? 'todo')
   const [dueDate, setDueDate] = useState(task?.due_date ?? '')
+  const [driveFolderId, setDriveFolderId] = useState((task as Task & { drive_folder_id?: string })?.drive_folder_id ?? '')
+  const [driveInput, setDriveInput] = useState(driveFolderId)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -32,7 +35,8 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       priority,
       status,
       due_date: dueDate || null,
-    })
+      drive_folder_id: driveFolderId.trim(),
+    } as Omit<Task, 'id' | 'created_at'>)
   }
 
   return (
@@ -105,6 +109,23 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Google Drive フォルダ
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={driveInput}
+                onChange={(e) => setDriveInput(e.target.value)}
+                onBlur={() => setDriveFolderId(driveInput)}
+                placeholder="フォルダURLまたはID"
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <DriveFiles folderId={driveFolderId} />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

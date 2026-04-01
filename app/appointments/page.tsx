@@ -7,6 +7,7 @@ import {
   Download
 } from 'lucide-react'
 import clsx from 'clsx'
+import DriveFiles from '@/components/DriveFiles'
 
 interface Appointment {
   id: string
@@ -23,6 +24,7 @@ interface Appointment {
   status: AppStatus
   file_urls: string[]
   photo_url: string
+  drive_folder_id: string
   created_at: string
 }
 
@@ -143,6 +145,7 @@ const EMPTY_FORM = {
   sale_amount: '',
   status: 'contacted' as AppStatus,
   photo_url: '',
+  drive_folder_id: '',
 }
 
 interface FormModalProps {
@@ -173,6 +176,9 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
   const [aiText, setAiText] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [showAiPanel, setShowAiPanel] = useState(false)
+  const [driveInput, setDriveInput] = useState(
+    initial?.drive_folder_id ?? ''
+  )
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -490,6 +496,19 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
           </div>
         </div>
 
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Google Drive フォルダ</label>
+            <input
+              type="text"
+              value={driveInput}
+              onChange={(e) => setDriveInput(e.target.value)}
+              onBlur={() => set('drive_folder_id', driveInput)}
+              placeholder="フォルダURLまたはID"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <DriveFiles folderId={form.drive_folder_id} />
+          </div>
+
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
           <button
             onClick={handleSave}
@@ -623,6 +642,13 @@ function DetailModal({ appo, onClose, onEdit, onDelete }: {
                   )
                 })}
               </div>
+            </div>
+          )}
+
+          {appo.drive_folder_id && (
+            <div>
+              <p className="text-xs text-gray-400 mb-1">Google Drive</p>
+              <DriveFiles folderId={appo.drive_folder_id} />
             </div>
           )}
         </div>
