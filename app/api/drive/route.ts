@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-export function extractFolderId(input: string): string {
+function extractFolderId(input: string): string {
   const match = input.match(/\/folders\/([a-zA-Z0-9_-]+)/)
   if (match) return match[1]
   return input.trim()
