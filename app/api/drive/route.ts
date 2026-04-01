@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-function extractFolderId(input: string): string {
-  // URL形式: https://drive.google.com/drive/folders/FOLDER_ID
+export function extractFolderId(input: string): string {
   const match = input.match(/\/folders\/([a-zA-Z0-9_-]+)/)
   if (match) return match[1]
-  // そのままIDとして使用
   return input.trim()
 }
 
@@ -22,16 +20,14 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const folderInput = searchParams.get('folder_id') ?? ''
-  if (!folderInput) return NextResponse.json({ files: [] })
-
-  const folderId = extractFolderId(folderInput)
+  const folderInput = searchParams.get('folder_id') ?? 'root'
+  const folderId = folderInput === 'root' ? 'root' : extractFolderId(folderInput)
 
   const query = encodeURIComponent(`'${folderId}' in parents and trashed = false`)
-  const fields = encodeURIComponent('files(id,name,mimeType,webViewLink,iconLink,modifiedTime,size)')
+  const fields = encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime,size),nextPageToken')
 
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&orderBy=name`,
+    `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&orderBy=folder,name&pageSize=100`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   )
 
@@ -41,5 +37,19 @@ export async function GET(req: NextRequest) {
   }
 
   const data = await res.json()
-  return NextResponse.json(data)
+
+  // フォルダ名も取得（rootでない場合）
+  let folderName = 'マイドライブ'
+  if (folderId !== 'root') {
+    const metaRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (metaRes.ok) {
+      const meta = await metaRes.json()
+      folderName = meta.name ?? folderId
+    }
+  }
+
+  return NextResponse.json({ ...data, folderName, folderId })
 }
