@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   HardDrive, Folder, FileText, ExternalLink,
-  ChevronRight, Home, Loader2, AlertCircle, Search, X
+  ChevronRight, Home, Loader2, AlertCircle, Search, X,
+  Users, Clock, Star
 } from 'lucide-react'
+import clsx from 'clsx'
 
 interface DriveFile {
   id: string
@@ -19,6 +21,15 @@ interface BreadcrumbItem {
   id: string
   name: string
 }
+
+type DriveView = 'folder' | 'shared' | 'recent' | 'starred'
+
+const VIEWS: { key: DriveView; label: string; icon: React.ElementType }[] = [
+  { key: 'folder', label: 'マイドライブ', icon: HardDrive },
+  { key: 'shared', label: '共有アイテム', icon: Users },
+  { key: 'recent', label: '最近使用', icon: Clock },
+  { key: 'starred', label: 'スター付き', icon: Star },
+]
 
 function getFileIcon(mimeType: string) {
   if (mimeType === 'application/vnd.google-apps.folder') {
@@ -56,16 +67,19 @@ export default function DrivePage() {
   const [files, setFiles] = useState<DriveFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [view, setView] = useState<DriveView>('folder')
   const [currentFolder, setCurrentFolder] = useState('root')
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { id: 'root', name: 'マイドライブ' }
   ])
   const [search, setSearch] = useState('')
 
-  const fetchFiles = useCallback(async (folderId: string) => {
+  const fetchFiles = useCallback(async (v: DriveView, folderId: string) => {
     setLoading(true)
     setError('')
-    const res = await fetch(`/api/drive?folder_id=${encodeURIComponent(folderId)}`)
+    const params = new URLSearchParams({ view: v })
+    if (v === 'folder') params.set('folder_id', folderId)
+    const res = await fetch(`/api/drive?${params.toString()}`)
     const data = await res.json()
     if (data.error) {
       setError('ファイルを取得できませんでした。再サインインが必要な場合があります。')
@@ -77,8 +91,17 @@ export default function DrivePage() {
   }, [])
 
   useEffect(() => {
-    fetchFiles(currentFolder)
-  }, [currentFolder, fetchFiles])
+    fetchFiles(view, currentFolder)
+  }, [view, currentFolder, fetchFiles])
+
+  const switchView = (v: DriveView) => {
+    setView(v)
+    setSearch('')
+    if (v === 'folder') {
+      setCurrentFolder('root')
+      setBreadcrumbs([{ id: 'root', name: 'マイドライブ' }])
+    }
+  }
 
   const navigateTo = (folder: DriveFile) => {
     setCurrentFolder(folder.id)
@@ -98,6 +121,7 @@ export default function DrivePage() {
 
   const folders = filtered.filter((f) => f.mimeType === 'application/vnd.google-apps.folder')
   const fileItems = filtered.filter((f) => f.mimeType !== 'application/vnd.google-apps.folder')
+  const isFolder = view === 'folder'
 
   return (
     <div>
@@ -119,7 +143,7 @@ export default function DrivePage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="このフォルダ内を検索"
+            placeholder="ファイル名で絞り込み"
             className="w-full pl-8 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
           />
           {search && (
@@ -130,25 +154,47 @@ export default function DrivePage() {
         </div>
       </div>
 
-      {/* パンくずリスト */}
-      <div className="flex items-center gap-1 mb-4 flex-wrap">
-        {breadcrumbs.map((item, i) => (
-          <div key={item.id} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight size={14} className="text-gray-300" />}
-            <button
-              onClick={() => navigateToBreadcrumb(item, i)}
-              className={`flex items-center gap-1 text-sm px-2 py-1 rounded-lg transition-colors ${
-                i === breadcrumbs.length - 1
-                  ? 'text-gray-900 font-medium bg-gray-100'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {i === 0 && <Home size={13} />}
-              {item.name}
-            </button>
-          </div>
+      {/* タブ */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1 w-fit">
+        {VIEWS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => switchView(key)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+              view === key
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
         ))}
       </div>
+
+      {/* パンくずリスト（マイドライブのみ） */}
+      {isFolder && (
+        <div className="flex items-center gap-1 mb-4 flex-wrap">
+          {breadcrumbs.map((item, i) => (
+            <div key={item.id} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight size={14} className="text-gray-300" />}
+              <button
+                onClick={() => navigateToBreadcrumb(item, i)}
+                className={clsx(
+                  'flex items-center gap-1 text-sm px-2 py-1 rounded-lg transition-colors',
+                  i === breadcrumbs.length - 1
+                    ? 'text-gray-900 font-medium bg-gray-100'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                )}
+              >
+                {i === 0 && <Home size={13} />}
+                {item.name}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* コンテンツ */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -162,7 +208,7 @@ export default function DrivePage() {
             <AlertCircle size={32} className="mb-3 text-red-300" />
             <p className="text-sm text-red-400">{error}</p>
             <button
-              onClick={() => fetchFiles(currentFolder)}
+              onClick={() => fetchFiles(view, currentFolder)}
               className="mt-3 text-xs text-blue-500 hover:underline"
             >
               再試行
@@ -184,12 +230,11 @@ export default function DrivePage() {
               </tr>
             </thead>
             <tbody>
-              {/* フォルダを先に表示 */}
               {folders.map((file) => (
                 <tr
                   key={file.id}
                   className="border-b border-gray-50 hover:bg-gray-50/70 transition-colors cursor-pointer group"
-                  onClick={() => navigateTo(file)}
+                  onClick={() => isFolder ? navigateTo(file) : window.open(file.webViewLink, '_blank')}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -202,17 +247,20 @@ export default function DrivePage() {
                   <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(file.modifiedTime)}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">—</td>
                   <td className="px-4 py-3">
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
+                    {isFolder
+                      ? <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
+                      : <ExternalLink size={13} className="text-gray-300 group-hover:text-blue-400" />
+                    }
                   </td>
                 </tr>
               ))}
-              {/* ファイルを表示 */}
               {fileItems.map((file, i) => (
                 <tr
                   key={file.id}
-                  className={`hover:bg-gray-50/70 transition-colors group ${
-                    i < fileItems.length - 1 ? 'border-b border-gray-50' : ''
-                  }`}
+                  className={clsx(
+                    'hover:bg-gray-50/70 transition-colors group',
+                    i < fileItems.length - 1 && 'border-b border-gray-50'
+                  )}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -222,7 +270,6 @@ export default function DrivePage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-gray-800 hover:text-blue-600 transition-colors"
-                        onClick={(e) => e.stopPropagation()}
                       >
                         {file.name}
                       </a>
@@ -235,7 +282,6 @@ export default function DrivePage() {
                       href={file.webViewLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <ExternalLink size={13} className="text-gray-400 hover:text-blue-500" />
@@ -248,10 +294,9 @@ export default function DrivePage() {
         )}
       </div>
 
-      {/* フッター情報 */}
       {!loading && !error && (
         <p className="text-xs text-gray-400 mt-3 text-right">
-          {folders.length}個のフォルダ・{fileItems.length}個のファイル
+          {folders.length > 0 && `${folders.length}個のフォルダ・`}{fileItems.length}個のファイル
         </p>
       )}
     </div>

@@ -20,16 +20,42 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
+  const view = searchParams.get('view') ?? 'folder'
   const folderInput = searchParams.get('folder_id') ?? 'root'
-  const folderId = folderInput === 'root' ? 'root' : extractFolderId(folderInput)
+  const fields = encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime,size,owners,shared)')
 
-  const query = encodeURIComponent(`'${folderId}' in parents and trashed = false`)
-  const fields = encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime,size),nextPageToken')
+  let apiUrl = ''
+  let folderName = 'マイドライブ'
 
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&orderBy=folder,name&pageSize=100`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  )
+  if (view === 'shared') {
+    const q = encodeURIComponent('sharedWithMe = true and trashed = false')
+    apiUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=sharedWithMeTime desc&pageSize=100`
+    folderName = '共有アイテム'
+  } else if (view === 'recent') {
+    const q = encodeURIComponent('trashed = false')
+    apiUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=viewedByMeTime desc&pageSize=50`
+    folderName = '最近使用したアイテム'
+  } else if (view === 'starred') {
+    const q = encodeURIComponent('starred = true and trashed = false')
+    apiUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=name&pageSize=100`
+    folderName = 'スター付き'
+  } else {
+    const folderId = folderInput === 'root' ? 'root' : extractFolderId(folderInput)
+    const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`)
+    apiUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=folder,name&pageSize=100`
+    if (folderId !== 'root') {
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (metaRes.ok) {
+        const meta = await metaRes.json()
+        folderName = meta.name ?? folderId
+      }
+    }
+  }
+
+  const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } })
 
   if (!res.ok) {
     const err = await res.text()
@@ -37,19 +63,5 @@ export async function GET(req: NextRequest) {
   }
 
   const data = await res.json()
-
-  // フォルダ名も取得（rootでない場合）
-  let folderName = 'マイドライブ'
-  if (folderId !== 'root') {
-    const metaRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    if (metaRes.ok) {
-      const meta = await metaRes.json()
-      folderName = meta.name ?? folderId
-    }
-  }
-
-  return NextResponse.json({ ...data, folderName, folderId })
+  return NextResponse.json({ ...data, folderName })
 }
