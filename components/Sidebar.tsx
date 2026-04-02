@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
-  Phone, Target, BarChart2, Bookmark, Users, TrendingUp,
-  PieChart, Activity, UserCog, LogOut, HardDrive, Flame,
+  Phone, Target, BarChart2, Users, TrendingUp,
+  PieChart, UserCog, LogOut, HardDrive, Flame,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -19,15 +19,12 @@ const menuItems = [
   { href: '/appointments', label: 'アポ管理', icon: Phone },
   { href: '/finance', label: '見込みリスト', icon: Target },
   { href: '/report', label: '個人レポート', icon: BarChart2 },
-  { href: '/bookmarks', label: 'ブックマーク', icon: Bookmark },
   { href: '/members', label: 'メンバー', icon: Users },
   { href: '/drive', label: 'Google Drive', icon: HardDrive },
 ]
 
 const adminItems = [
-  { href: '/admin/finance', label: '財務管理（全体）', icon: TrendingUp },
   { href: '/admin/pl', label: '全体PL管理', icon: PieChart },
-  { href: '/admin/diagnosis', label: '従業員診断', icon: Activity },
   { href: '/admin/users', label: 'ユーザー管理', icon: UserCog },
 ]
 
