@@ -248,14 +248,7 @@ export default function ProspectsPage() {
     }
   }
 
-  const updateEntry = async (templateId: string, weekNum: number, patch: Partial<GoalEntry>) => {
-    const current = getEntry(templateId, weekNum)
-    const updated = { ...current, ...patch }
-    // 楽観的更新
-    setEntryMap((prev) => ({
-      ...prev,
-      [`${templateId}-${weekNum}`]: updated,
-    }))
+  const upsertEntry = async (templateId: string, weekNum: number, data: { target_value?: number; actual_value?: number; reflection?: string }) => {
     await fetch('/api/goals/entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -263,11 +256,62 @@ export default function ProspectsPage() {
         template_id: templateId,
         year_month: yearMonth,
         week_num: weekNum,
-        target_value: updated.target_value,
-        actual_value: updated.actual_value,
-        reflection: updated.reflection,
+        ...data,
       }),
     })
+  }
+
+  const updateEntry = async (templateId: string, weekNum: number, patch: Partial<GoalEntry>) => {
+    const current = getEntry(templateId, weekNum)
+    const updated = { ...current, ...patch }
+
+    // 月合計の目標を変更 → 1〜4週目に÷4を自動セット、5週目は0
+    if (weekNum === 0 && 'target_value' in patch) {
+      const perWeek = Math.round((patch.target_value ?? 0) / 4)
+      const newMap: EntryMap = { [`${templateId}-0`]: updated }
+      for (let w = 1; w <= 4; w++) {
+        const wCurrent = getEntry(templateId, w)
+        newMap[`${templateId}-${w}`] = { ...wCurrent, target_value: perWeek }
+      }
+      const w5Current = getEntry(templateId, 5)
+      newMap[`${templateId}-5`] = { ...w5Current, target_value: 0 }
+      setEntryMap((prev) => ({ ...prev, ...newMap }))
+
+      await upsertEntry(templateId, 0, { target_value: updated.target_value, actual_value: updated.actual_value, reflection: updated.reflection })
+      for (let w = 1; w <= 4; w++) {
+        await upsertEntry(templateId, w, { target_value: perWeek })
+      }
+      await upsertEntry(templateId, 5, { target_value: 0 })
+      return
+    }
+
+    // 週次実績を変更 → 月合計実績に自動集計
+    if (weekNum >= 1 && 'actual_value' in patch) {
+      setEntryMap((prev) => {
+        const next = { ...prev, [`${templateId}-${weekNum}`]: updated }
+        const sum = [1, 2, 3, 4, 5].reduce((acc, w) => {
+          const e = next[`${templateId}-${w}`]
+          return acc + (e?.actual_value ?? 0)
+        }, 0)
+        const summary = next[`${templateId}-0`] ?? getEntry(templateId, 0)
+        next[`${templateId}-0`] = { ...summary, actual_value: sum }
+        return next
+      })
+      await upsertEntry(templateId, weekNum, { target_value: updated.target_value, actual_value: updated.actual_value, reflection: updated.reflection })
+      // 月合計実績の更新（最新のentryMapから計算）
+      const sum = [1, 2, 3, 4, 5].reduce((acc, w) => {
+        const key = `${templateId}-${w}`
+        const val = w === weekNum ? (patch.actual_value ?? 0) : (entryMap[key]?.actual_value ?? 0)
+        return acc + val
+      }, 0)
+      const summary0 = getEntry(templateId, 0)
+      await upsertEntry(templateId, 0, { actual_value: sum, target_value: summary0.target_value, reflection: summary0.reflection })
+      return
+    }
+
+    // 通常更新
+    setEntryMap((prev) => ({ ...prev, [`${templateId}-${weekNum}`]: updated }))
+    await upsertEntry(templateId, weekNum, { target_value: updated.target_value, actual_value: updated.actual_value, reflection: updated.reflection })
   }
 
   const changeMonth = (delta: number) => {
