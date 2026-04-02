@@ -6,7 +6,7 @@ import { useSession, signOut } from 'next-auth/react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
   Phone, Wallet, BarChart2, Bookmark, Users, TrendingUp,
-  PieChart, Activity, UserCog, LogOut, HardDrive,
+  PieChart, Activity, UserCog, LogOut, HardDrive, Flame,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -35,7 +35,6 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
 
-  // ログインページでは非表示
   if (pathname === '/login') return null
 
   const name = session?.user?.name ?? '...'
@@ -43,13 +42,24 @@ export default function Sidebar() {
   const initial = name.charAt(0)
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-56 flex flex-col bg-[#1a1f2e] text-white z-50">
+    <aside className="fixed left-0 top-0 h-screen w-56 flex flex-col z-50"
+      style={{ background: 'linear-gradient(180deg, #1C1410 0%, #2D1F14 100%)' }}
+    >
+      {/* ロゴ */}
       <div className="px-5 py-5 border-b border-white/10">
-        <h1 className="text-base font-bold text-white">業務管理</h1>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
+            <Flame size={15} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-white tracking-wide">Rekka Portal</h1>
+            <p className="text-[9px] text-orange-400/70 tracking-wider uppercase">Business System</p>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4">
-        <p className="px-5 mb-2 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
+        <p className="px-5 mb-2 text-[9px] font-semibold text-white/25 uppercase tracking-widest">
           メニュー
         </p>
         <ul className="space-y-0.5 px-2">
@@ -61,13 +71,13 @@ export default function Sidebar() {
                 <Link
                   href={item.href}
                   className={clsx(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
                     active
-                      ? 'bg-white/10 text-white font-medium'
+                      ? 'bg-orange-500 text-white font-medium shadow-lg shadow-orange-500/20'
                       : 'text-white/50 hover:bg-white/5 hover:text-white/80'
                   )}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   {item.label}
                 </Link>
               </li>
@@ -75,8 +85,8 @@ export default function Sidebar() {
           })}
         </ul>
 
-        <p className="px-5 mt-5 mb-2 text-[10px] font-semibold text-white/30 uppercase tracking-widest">
-          管理者メニュー
+        <p className="px-5 mt-5 mb-2 text-[9px] font-semibold text-white/25 uppercase tracking-widest">
+          管理者
         </p>
         <ul className="space-y-0.5 px-2">
           {adminItems.map((item) => {
@@ -87,13 +97,13 @@ export default function Sidebar() {
                 <Link
                   href={item.href}
                   className={clsx(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
                     active
-                      ? 'bg-white/10 text-white font-medium'
+                      ? 'bg-orange-500 text-white font-medium shadow-lg shadow-orange-500/20'
                       : 'text-white/50 hover:bg-white/5 hover:text-white/80'
                   )}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   {item.label}
                 </Link>
               </li>
@@ -102,6 +112,7 @@ export default function Sidebar() {
         </ul>
       </nav>
 
+      {/* ユーザー */}
       <div className="border-t border-white/10 px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           {session?.user?.image ? (
@@ -109,10 +120,10 @@ export default function Sidebar() {
             <img
               src={session.user.image}
               alt={name}
-              className="w-8 h-8 rounded-full flex-shrink-0"
+              className="w-8 h-8 rounded-full flex-shrink-0 ring-2 ring-orange-500/30"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold flex-shrink-0 text-white">
               {initial}
             </div>
           )}
@@ -123,7 +134,7 @@ export default function Sidebar() {
         </div>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
-          className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+          className="text-white/30 hover:text-orange-400 transition-colors flex-shrink-0"
           title="サインアウト"
         >
           <LogOut size={14} />

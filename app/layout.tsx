@@ -4,14 +4,14 @@ import AuthProvider from '@/components/AuthProvider'
 import Sidebar from '@/components/Sidebar'
 
 export const metadata: Metadata = {
-  title: '業務管理システム',
-  description: '業務の全体像を把握するダッシュボード',
+  title: 'Rekka Portal',
+  description: '社長の伴走型業務整理 - Rekka Portal',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className="bg-gray-50 text-gray-900">
+      <body className="bg-[#F9F7F5] text-gray-900">
         <AuthProvider>
           <Sidebar />
           <main className="ml-56 min-h-screen">
