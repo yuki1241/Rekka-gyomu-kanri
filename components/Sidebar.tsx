@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
-  Phone, Wallet, BarChart2, Bookmark, Users, TrendingUp,
+  Phone, Target, BarChart2, Bookmark, Users, TrendingUp,
   PieChart, Activity, UserCog, LogOut, HardDrive, Flame,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -17,7 +17,7 @@ const menuItems = [
   { href: '/schedule', label: 'スケジュール', icon: Calendar },
   { href: '/expenses', label: '経費精算', icon: Receipt },
   { href: '/appointments', label: 'アポ管理', icon: Phone },
-  { href: '/finance', label: '個人財務管理', icon: Wallet },
+  { href: '/finance', label: '見込みリスト', icon: Target },
   { href: '/report', label: '個人レポート', icon: BarChart2 },
   { href: '/bookmarks', label: 'ブックマーク', icon: Bookmark },
   { href: '/members', label: 'メンバー', icon: Users },
