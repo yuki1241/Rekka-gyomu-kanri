@@ -40,6 +40,7 @@ export default function Sidebar() {
   const name = session?.user?.name ?? '...'
   const email = session?.user?.email ?? ''
   const initial = name.charAt(0)
+  const isAdmin = session?.user?.role === 'admin'
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 flex flex-col z-50"
@@ -85,31 +86,35 @@ export default function Sidebar() {
           })}
         </ul>
 
-        <p className="px-5 mt-5 mb-2 text-[9px] font-semibold text-white/25 uppercase tracking-widest">
-          管理者
-        </p>
-        <ul className="space-y-0.5 px-2">
-          {adminItems.map((item) => {
-            const Icon = item.icon
-            const active = pathname === item.href
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={clsx(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
-                    active
-                      ? 'bg-orange-500 text-white font-medium shadow-lg shadow-orange-500/20'
-                      : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-                  )}
-                >
-                  <Icon size={15} />
-                  {item.label}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+        {isAdmin && (
+          <>
+            <p className="px-5 mt-5 mb-2 text-[9px] font-semibold text-white/25 uppercase tracking-widest">
+              管理者
+            </p>
+            <ul className="space-y-0.5 px-2">
+              {adminItems.map((item) => {
+                const Icon = item.icon
+                const active = pathname === item.href
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={clsx(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
+                        active
+                          ? 'bg-orange-500 text-white font-medium shadow-lg shadow-orange-500/20'
+                          : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                      )}
+                    >
+                      <Icon size={15} />
+                      {item.label}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
       </nav>
 
       {/* ユーザー */}

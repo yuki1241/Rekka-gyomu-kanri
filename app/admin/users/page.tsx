@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Trash2, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
+import AdminGuard from '@/components/AdminGuard'
 
 interface AppUser {
   id: string
@@ -20,7 +21,7 @@ const roleColor = {
   viewer: 'bg-gray-100 text-gray-600',
 }
 
-export default function UsersPage() {
+function UsersPageContent() {
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -247,4 +248,8 @@ export default function UsersPage() {
       </div>
     </div>
   )
+}
+
+export default function UsersPage() {
+  return <AdminGuard><UsersPageContent /></AdminGuard>
 }
