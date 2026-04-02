@@ -6,7 +6,7 @@ import { createServerSupabase } from '@/lib/supabase'
 const DEFAULT_TEMPLATES = [
   { type: 'KGI', order_num: 1, label: 'KGI（目標）' },
   { type: 'KPI', order_num: 1, label: 'KPI（指標）' },
-  ...Array.from({ length: 10 }, (_, i) => ({ type: 'KDI', order_num: i + 1, label: '' })),
+  ...Array.from({ length: 5 }, (_, i) => ({ type: 'KDI', order_num: i + 1, label: '' })),
 ]
 
 export async function GET(req: NextRequest) {
