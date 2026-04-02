@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import clsx from 'clsx'
 
 interface GoalTemplate {
@@ -22,6 +22,92 @@ interface GoalEntry {
 }
 
 type EntryMap = Record<string, GoalEntry> // key: `${template_id}-${week_num}`
+
+interface ProspectClient {
+  id: string
+  company_name: string
+  contact_name: string
+  service_content: string
+  status: '見込み' | '成約' | '失注'
+  contracted_at: string | null
+  memo: string
+  created_at: string
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  '見込み': 'bg-blue-100 text-blue-700',
+  '成約': 'bg-green-100 text-green-700',
+  '失注': 'bg-gray-100 text-gray-500',
+}
+
+function ProspectForm({ initial, onSave, onCancel }: {
+  initial?: Partial<ProspectClient>
+  onSave: (data: Partial<ProspectClient>) => void
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState({
+    company_name: initial?.company_name ?? '',
+    contact_name: initial?.contact_name ?? '',
+    service_content: initial?.service_content ?? '',
+    status: initial?.status ?? '見込み' as ProspectClient['status'],
+    contracted_at: initial?.contracted_at ?? '',
+    memo: initial?.memo ?? '',
+  })
+
+  const set = (key: string, value: string) => setForm((p) => ({ ...p, [key]: value }))
+
+  return (
+    <div className="bg-white border border-orange-200 rounded-xl p-4 shadow-sm">
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">会社名</label>
+          <input value={form.company_name} onChange={(e) => set('company_name', e.target.value)}
+            placeholder="株式会社〇〇" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">顧客名</label>
+          <input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)}
+            placeholder="山田 太郎" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+        </div>
+      </div>
+      <div className="mb-3">
+        <label className="text-[10px] font-semibold text-gray-500 mb-1 block">商談内容</label>
+        <input value={form.service_content} onChange={(e) => set('service_content', e.target.value)}
+          placeholder="DXコンサル、kintone導入 など" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">ステータス</label>
+          <select value={form.status} onChange={(e) => set('status', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 bg-white">
+            <option value="見込み">見込み</option>
+            <option value="成約">成約</option>
+            <option value="失注">失注</option>
+          </select>
+        </div>
+        {(form.status === '成約' || form.status === '失注') && (
+          <div>
+            <label className="text-[10px] font-semibold text-gray-500 mb-1 block">
+              {form.status === '成約' ? '成約日' : '失注日'}
+            </label>
+            <input type="date" value={form.contracted_at ?? ''} onChange={(e) => set('contracted_at', e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+          </div>
+        )}
+      </div>
+      <div className="mb-4">
+        <label className="text-[10px] font-semibold text-gray-500 mb-1 block">メモ</label>
+        <textarea value={form.memo} onChange={(e) => set('memo', e.target.value)}
+          rows={2} placeholder="備考など..." className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 resize-none" />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">キャンセル</button>
+        <button onClick={() => onSave({ ...form, contracted_at: form.contracted_at || null })}
+          className="px-4 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium">保存</button>
+      </div>
+    </div>
+  )
+}
 
 const WEEKS = [
   { num: 0, label: '月合計' },
@@ -226,18 +312,57 @@ export default function ProspectsPage() {
   const [loading, setLoading] = useState(true)
   const [showEditor, setShowEditor] = useState(false)
 
+  // 顧客管理
+  const [prospects, setProspects] = useState<ProspectClient[]>([])
+  const [showProspectForm, setShowProspectForm] = useState(false)
+  const [editingProspect, setEditingProspect] = useState<ProspectClient | null>(null)
+  const [showLost, setShowLost] = useState(false)
+
   const fetchData = useCallback(async (ym: string) => {
     setLoading(true)
-    const res = await fetch(`/api/goals?year_month=${ym}`)
-    const data = await res.json()
+    const [goalsRes, prospectsRes] = await Promise.all([
+      fetch(`/api/goals?year_month=${ym}`),
+      fetch('/api/prospects'),
+    ])
+    const data = await goalsRes.json()
     setTemplates(data.templates ?? [])
     const map: EntryMap = {}
     for (const e of (data.entries ?? [])) {
       map[`${e.template_id}-${e.week_num}`] = e
     }
     setEntryMap(map)
+    const pData = await prospectsRes.json()
+    setProspects(Array.isArray(pData) ? pData : [])
     setLoading(false)
   }, [])
+
+  const addProspect = async (form: Partial<ProspectClient>) => {
+    const res = await fetch('/api/prospects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    setProspects((prev) => [data, ...prev])
+    setShowProspectForm(false)
+  }
+
+  const updateProspect = async (id: string, form: Partial<ProspectClient>) => {
+    const res = await fetch(`/api/prospects/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    setProspects((prev) => prev.map((p) => p.id === id ? data : p))
+    setEditingProspect(null)
+  }
+
+  const deleteProspect = async (id: string) => {
+    if (!confirm('削除しますか？')) return
+    await fetch(`/api/prospects/${id}`, { method: 'DELETE' })
+    setProspects((prev) => prev.filter((p) => p.id !== id))
+  }
 
   useEffect(() => { fetchData(yearMonth) }, [yearMonth, fetchData])
 
@@ -476,6 +601,181 @@ export default function ProspectsPage() {
         <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold">50〜99%</span>
         <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">50%未満</span>
         <span className="ml-2">数値セルをクリックで編集　💬アイコンで振り返りを入力</span>
+      </div>
+
+      {/* 顧客管理セクション */}
+      <div className="mt-10 space-y-6">
+
+        {/* 見込み中 */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+              <h3 className="text-sm font-bold text-gray-800">見込み中</h3>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                {prospects.filter((p) => p.status === '見込み').length}件
+              </span>
+            </div>
+            <button
+              onClick={() => { setShowProspectForm(true); setEditingProspect(null) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+            >
+              <Plus size={12} /> 追加
+            </button>
+          </div>
+
+          {showProspectForm && !editingProspect && (
+            <div className="mb-3">
+              <ProspectForm
+                onSave={addProspect}
+                onCancel={() => setShowProspectForm(false)}
+              />
+            </div>
+          )}
+
+          {prospects.filter((p) => p.status === '見込み').length === 0 && !showProspectForm ? (
+            <div className="text-center py-8 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
+              見込み客を追加してください
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {prospects.filter((p) => p.status === '見込み').map((p) => (
+                <div key={p.id}>
+                  {editingProspect?.id === p.id ? (
+                    <ProspectForm
+                      initial={p}
+                      onSave={(form) => updateProspect(p.id, form)}
+                      onCancel={() => setEditingProspect(null)}
+                    />
+                  ) : (
+                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-start gap-4 hover:border-orange-200 transition-colors shadow-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
+                          {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
+                        </div>
+                        {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
+                        {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button onClick={() => setEditingProspect(p)}
+                          className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                        <button onClick={() => deleteProspect(p.id)}
+                          className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 成約（選択月） */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+            <h3 className="text-sm font-bold text-gray-800">{displayMonth()} 成約</h3>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+              {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).length}件
+            </span>
+          </div>
+          {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).length === 0 ? (
+            <div className="text-center py-6 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
+              この月の成約はありません
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).map((p) => (
+                <div key={p.id}>
+                  {editingProspect?.id === p.id ? (
+                    <ProspectForm
+                      initial={p}
+                      onSave={(form) => updateProspect(p.id, form)}
+                      onCancel={() => setEditingProspect(null)}
+                    />
+                  ) : (
+                    <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 flex items-start gap-4 hover:border-green-300 transition-colors shadow-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
+                          {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
+                          <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">成約</span>
+                          {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
+                        </div>
+                        {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
+                        {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button onClick={() => setEditingProspect(p)}
+                          className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                        <button onClick={() => deleteProspect(p.id)}
+                          className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 失注（トグル） */}
+        <div>
+          <button
+            onClick={() => setShowLost((v) => !v)}
+            className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            {showLost ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            失注
+            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
+              {prospects.filter((p) => p.status === '失注').length}件
+            </span>
+          </button>
+          {showLost && (
+            <div className="mt-3 space-y-2">
+              {prospects.filter((p) => p.status === '失注').length === 0 ? (
+                <div className="text-center py-6 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">失注はありません</div>
+              ) : (
+                prospects.filter((p) => p.status === '失注').map((p) => (
+                  <div key={p.id}>
+                    {editingProspect?.id === p.id ? (
+                      <ProspectForm
+                        initial={p}
+                        onSave={(form) => updateProspect(p.id, form)}
+                        onCancel={() => setEditingProspect(null)}
+                      />
+                    ) : (
+                      <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-start gap-4 opacity-60">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-semibold text-gray-700 truncate">{p.company_name || '（会社名未入力）'}</span>
+                            {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
+                            <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-bold">失注</span>
+                            {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
+                          </div>
+                          {p.service_content && <p className="text-xs text-gray-400 truncate">{p.service_content}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button onClick={() => setEditingProspect(p)}
+                            className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                          <button onClick={() => deleteProspect(p.id)}
+                            className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {showEditor && (
