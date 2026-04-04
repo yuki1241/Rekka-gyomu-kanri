@@ -52,8 +52,11 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
         if (d.sheets) {
           setSheets(d.sheets)
           setSheetName(d.sheets[0]?.title ?? '')
+        } else {
+          setError(d.error ?? 'シート一覧の取得に失敗しました')
         }
       })
+      .catch((e) => setError(String(e)))
   }, [])
 
   const handlePreview = async () => {
