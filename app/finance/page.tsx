@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check, Plus, Trash2, ChevronDown, ChevronUp, Upload } from 'lucide-react'
 import clsx from 'clsx'
 
 interface GoalTemplate {
@@ -32,6 +32,118 @@ interface ProspectClient {
   contracted_at: string | null
   memo: string
   created_at: string
+}
+
+const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
+
+function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [sheets, setSheets] = useState<{ title: string; sheetId: number }[]>([])
+  const [sheetName, setSheetName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<{ months: string[]; total: number } | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [done, setDone] = useState<{ months: string[]; inserted: number } | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch(`/api/sheets/import?id=${SPREADSHEET_ID}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.sheets) {
+          setSheets(d.sheets)
+          setSheetName(d.sheets[0]?.title ?? '')
+        }
+      })
+  }, [])
+
+  const handlePreview = async () => {
+    setLoading(true); setError(''); setPreview(null)
+    const res = await fetch('/api/sheets/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: true }),
+    })
+    const data = await res.json()
+    setLoading(false)
+    if (!res.ok) { setError(data.error ?? 'エラーが発生しました'); return }
+    setPreview({ months: data.months, total: data.total })
+  }
+
+  const handleImport = async () => {
+    setImporting(true); setError('')
+    const res = await fetch('/api/sheets/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: false }),
+    })
+    const data = await res.json()
+    setImporting(false)
+    if (!res.ok) { setError(data.error ?? 'エラーが発生しました'); return }
+    setDone({ months: data.months, inserted: data.inserted })
+    onDone()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">スプレッドシートからインポート</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">シートを選択</label>
+            <select value={sheetName} onChange={(e) => setSheetName(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 bg-white">
+              {sheets.map((s) => <option key={s.sheetId} value={s.title}>{s.title}</option>)}
+            </select>
+          </div>
+
+          {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+
+          {done ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-green-700 mb-1">インポート完了！</p>
+              <p className="text-xs text-green-600">{done.months.length}ヶ月分・{done.inserted}件のデータを取り込みました</p>
+              <p className="text-xs text-green-600 mt-1">対象月：{done.months.join('、')}</p>
+            </div>
+          ) : preview ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-orange-700 mb-1">プレビュー</p>
+              <p className="text-xs text-gray-600">{preview.months.length}ヶ月分 / {preview.total}件のデータが見つかりました</p>
+              <p className="text-xs text-gray-500 mt-1">対象月：{preview.months.join('、')}</p>
+              <p className="text-xs text-gray-400 mt-2">※既存データは上書きされます</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">
+              「久保田」シートのKGI・KPI・KDIデータを全月分取り込みます。
+            </p>
+          )}
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          {done ? (
+            <button onClick={onClose} className="flex-1 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium">閉じる</button>
+          ) : preview ? (
+            <>
+              <button onClick={handleImport} disabled={importing}
+                className="flex-1 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50">
+                {importing ? 'インポート中...' : 'インポート実行'}
+              </button>
+              <button onClick={() => setPreview(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">戻る</button>
+            </>
+          ) : (
+            <>
+              <button onClick={handlePreview} disabled={loading || !sheetName}
+                className="flex-1 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50">
+                {loading ? '確認中...' : '内容を確認'}
+              </button>
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">キャンセル</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -311,6 +423,7 @@ export default function ProspectsPage() {
   const [entryMap, setEntryMap] = useState<EntryMap>({})
   const [loading, setLoading] = useState(true)
   const [showEditor, setShowEditor] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   // 顧客管理
   const [prospects, setProspects] = useState<ProspectClient[]>([])
@@ -484,13 +597,22 @@ export default function ProspectsPage() {
             <p className="text-gray-500 mt-0.5 text-sm">KGI・KPI・KDIの目標管理</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowEditor(true)}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <Settings size={14} />
-          ラベルを編集
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-orange-200 text-orange-600 text-sm rounded-lg hover:bg-orange-50 transition-colors"
+          >
+            <Upload size={14} />
+            シートから取込
+          </button>
+          <button
+            onClick={() => setShowEditor(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Settings size={14} />
+            ラベルを編集
+          </button>
+        </div>
       </div>
 
       {/* 月ナビゲーション */}
@@ -777,6 +899,13 @@ export default function ProspectsPage() {
           )}
         </div>
       </div>
+
+      {showImport && (
+        <SheetImportModal
+          onClose={() => setShowImport(false)}
+          onDone={() => fetchData(yearMonth)}
+        />
+      )}
 
       {showEditor && (
         <TemplateEditor
