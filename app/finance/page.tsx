@@ -39,6 +39,8 @@ const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
 function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [sheets, setSheets] = useState<{ title: string; sheetId: number }[]>([])
   const [sheetName, setSheetName] = useState('')
+  const [fromMonth, setFromMonth] = useState('2025-01')
+  const [toMonth, setToMonth] = useState('2026-03')
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<{ months: string[]; total: number } | null>(null)
   const [importing, setImporting] = useState(false)
@@ -64,7 +66,7 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     const res = await fetch('/api/sheets/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: true }),
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: true, fromMonth, toMonth }),
     })
     const data = await res.json()
     setLoading(false)
@@ -77,7 +79,7 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     const res = await fetch('/api/sheets/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: false }),
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: false, fromMonth, toMonth }),
     })
     const data = await res.json()
     setImporting(false)
@@ -100,6 +102,19 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 bg-white">
               {sheets.map((s) => <option key={s.sheetId} value={s.title}>{s.title}</option>)}
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">取込開始月</label>
+              <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">取込終了月</label>
+              <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+            </div>
           </div>
 
           {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}

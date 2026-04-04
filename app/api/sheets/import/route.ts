@@ -59,11 +59,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, dryRun } = await req.json()
+  const { spreadsheetId, sheetName, dryRun, fromMonth, toMonth } = await req.json()
   if (!spreadsheetId) return NextResponse.json({ error: 'spreadsheetId required' }, { status: 400 })
 
   // Google Sheets API でデータ取得
-  const range = sheetName ? `${sheetName}!A1:AB200` : 'A1:AB200'
+  const range = sheetName ? `${sheetName}!A1:AB600` : 'A1:AB600'
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`
   const sheetsRes = await fetch(url, {
     headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -128,13 +128,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 月フィルタ
+  const filteredParsed = parsed.filter((p) => {
+    if (fromMonth && p.year_month < fromMonth) return false
+    if (toMonth && p.year_month > toMonth) return false
+    return true
+  })
+  const filteredMonths = months.filter((m) => {
+    if (fromMonth && m < fromMonth) return false
+    if (toMonth && m > toMonth) return false
+    return true
+  })
+
   if (dryRun) {
-    return NextResponse.json({ months, preview: parsed.slice(0, 30), total: parsed.length })
+    return NextResponse.json({ months: filteredMonths, preview: filteredParsed.slice(0, 30), total: filteredParsed.length })
   }
 
   // DBに保存
   const supabase = createServerSupabase()
   const userEmail = session.user.email
+
+  // goal_templates を取得/更新（フィルタ済みデータを使用）
+  const labelsSource = filteredParsed
+  const entriesToImport = filteredParsed
 
   // goal_templates を取得/更新
   const { data: templates } = await supabase
@@ -149,9 +165,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ラベルを更新（最初の月のデータを使用）
-  const firstMonth = months[0]
-  const labelsToUpdate = parsed.filter((p) => p.year_month === firstMonth && p.week === 0)
+  // ラベルを更新（フィルタ後の最初の月のデータを使用）
+  const firstMonth = filteredMonths[0]
+  const labelsToUpdate = labelsSource.filter((p) => p.year_month === firstMonth && p.week === 0)
   for (const item of labelsToUpdate) {
     const key = `${item.type}-${item.order}`
     const tmplId = templateMap[key]
@@ -163,7 +179,7 @@ export async function POST(req: NextRequest) {
   // goal_entries をupsert
   let inserted = 0
   const batchSize = 50
-  const entries = parsed.map((p) => {
+  const entries = entriesToImport.map((p) => {
     const key = `${p.type}-${p.order}`
     const template_id = templateMap[key]
     if (!template_id) return null
@@ -186,7 +202,7 @@ export async function POST(req: NextRequest) {
     if (!error) inserted += batch.length
   }
 
-  return NextResponse.json({ ok: true, months, inserted })
+  return NextResponse.json({ ok: true, months: filteredMonths, inserted })
 }
 
 // シートの一覧を取得
