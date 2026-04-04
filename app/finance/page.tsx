@@ -41,10 +41,11 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [sheetName, setSheetName] = useState('')
   const [fromMonth, setFromMonth] = useState('2025-01')
   const [toMonth, setToMonth] = useState('2026-03')
+  const [importProspects, setImportProspects] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [preview, setPreview] = useState<{ months: string[]; total: number } | null>(null)
+  const [preview, setPreview] = useState<{ months: string[]; total: number; prospectTotal: number } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [done, setDone] = useState<{ months: string[]; inserted: number } | null>(null)
+  const [done, setDone] = useState<{ months: string[]; inserted: number; prospectInserted: number } | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -66,12 +67,12 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     const res = await fetch('/api/sheets/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: true, fromMonth, toMonth }),
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName, dryRun: true, fromMonth, toMonth, importProspects }),
     })
     const data = await res.json()
     setLoading(false)
     if (!res.ok) { setError(data.error ?? 'エラーが発生しました'); return }
-    setPreview({ months: data.months, total: data.total })
+    setPreview({ months: data.months, total: data.total, prospectTotal: data.prospectTotal ?? 0 })
   }
 
   const handleImport = async () => {
@@ -84,7 +85,7 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
     const data = await res.json()
     setImporting(false)
     if (!res.ok) { setError(data.error ?? 'エラーが発生しました'); return }
-    setDone({ months: data.months, inserted: data.inserted })
+    setDone({ months: data.months, inserted: data.inserted, prospectInserted: data.prospectInserted ?? 0 })
     onDone()
   }
 
@@ -117,24 +118,32 @@ function SheetImportModal({ onClose, onDone }: { onClose: () => void; onDone: ()
             </div>
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={importProspects} onChange={(e) => setImportProspects(e.target.checked)}
+              className="w-4 h-4 accent-orange-500" />
+            <span className="text-xs text-gray-600">KGI振り返り欄の企業名を「成約」として取込む</span>
+          </label>
+
           {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
           {done ? (
             <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
               <p className="text-sm font-semibold text-green-700 mb-1">インポート完了！</p>
-              <p className="text-xs text-green-600">{done.months.length}ヶ月分・{done.inserted}件のデータを取り込みました</p>
+              <p className="text-xs text-green-600">KGI/KPI/KDI：{done.months.length}ヶ月分 {done.inserted}件</p>
+              {done.prospectInserted > 0 && <p className="text-xs text-green-600">成約企業：{done.prospectInserted}件</p>}
               <p className="text-xs text-green-600 mt-1">対象月：{done.months.join('、')}</p>
             </div>
           ) : preview ? (
             <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
               <p className="text-sm font-semibold text-orange-700 mb-1">プレビュー</p>
-              <p className="text-xs text-gray-600">{preview.months.length}ヶ月分 / {preview.total}件のデータが見つかりました</p>
+              <p className="text-xs text-gray-600">KGI/KPI/KDI：{preview.months.length}ヶ月分 / {preview.total}件</p>
+              {importProspects && <p className="text-xs text-gray-600">成約企業：{preview.prospectTotal}件（KGI振り返りから抽出）</p>}
               <p className="text-xs text-gray-500 mt-1">対象月：{preview.months.join('、')}</p>
               <p className="text-xs text-gray-400 mt-2">※既存データは上書きされます</p>
             </div>
           ) : (
             <p className="text-xs text-gray-400">
-              「久保田」シートのKGI・KPI・KDIデータを全月分取り込みます。
+              KGI・KPI・KDIデータと成約企業名を取り込みます。
             </p>
           )}
         </div>

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, dryRun, fromMonth, toMonth } = await req.json()
+  const { spreadsheetId, sheetName, dryRun, fromMonth, toMonth, importProspects } = await req.json()
   if (!spreadsheetId) return NextResponse.json({ error: 'spreadsheetId required' }, { status: 400 })
 
   // Google Sheets API でデータ取得
@@ -128,6 +128,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // KGI月合計振り返りから成約企業を抽出
+  interface ProspectEntry {
+    year_month: string
+    company_name: string
+  }
+  const prospectEntries: ProspectEntry[] = []
+  for (const p of parsed) {
+    if (p.type === 'KGI' && p.week === 0 && p.reflection) {
+      const names = p.reflection
+        .split(/[、,，\n]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !s.match(/^[（(]/))
+      for (const name of names) {
+        prospectEntries.push({ year_month: p.year_month, company_name: name })
+      }
+    }
+  }
+
   // 月フィルタ
   const filteredParsed = parsed.filter((p) => {
     if (fromMonth && p.year_month < fromMonth) return false
@@ -140,8 +158,20 @@ export async function POST(req: NextRequest) {
     return true
   })
 
+  const filteredProspects = prospectEntries.filter((p) => {
+    if (fromMonth && p.year_month < fromMonth) return false
+    if (toMonth && p.year_month > toMonth) return false
+    return true
+  })
+
   if (dryRun) {
-    return NextResponse.json({ months: filteredMonths, preview: filteredParsed.slice(0, 30), total: filteredParsed.length })
+    return NextResponse.json({
+      months: filteredMonths,
+      preview: filteredParsed.slice(0, 30),
+      total: filteredParsed.length,
+      prospectPreview: filteredProspects.slice(0, 10),
+      prospectTotal: filteredProspects.length,
+    })
   }
 
   // DBに保存
@@ -202,7 +232,24 @@ export async function POST(req: NextRequest) {
     if (!error) inserted += batch.length
   }
 
-  return NextResponse.json({ ok: true, months: filteredMonths, inserted })
+  // 成約企業をprospect_clientsに挿入
+  let prospectInserted = 0
+  if (importProspects) {
+    for (const p of filteredProspects) {
+      const { error } = await supabase.from('prospect_clients').insert({
+        user_email: userEmail,
+        company_name: p.company_name,
+        contact_name: '',
+        service_content: '',
+        status: '成約',
+        contracted_at: `${p.year_month}-01`,
+        memo: '',
+      })
+      if (!error) prospectInserted++
+    }
+  }
+
+  return NextResponse.json({ ok: true, months: filteredMonths, inserted, prospectInserted })
 }
 
 // シートの一覧を取得
