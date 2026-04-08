@@ -6,7 +6,7 @@ import { useSession, signOut } from 'next-auth/react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
   Phone, Target, BarChart2, Users, TrendingUp,
-  PieChart, UserCog, LogOut, HardDrive, Flame,
+  PieChart, UserCog, LogOut, HardDrive, Flame, ClipboardList,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -20,6 +20,7 @@ const menuItems = [
   { href: '/finance', label: '見込みリスト', icon: Target },
   { href: '/report', label: '個人レポート', icon: BarChart2 },
   { href: '/members', label: 'メンバー', icon: Users },
+  { href: '/invoices', label: '請求管理', icon: ClipboardList },
   { href: '/drive', label: 'Google Drive', icon: HardDrive },
 ]
 
