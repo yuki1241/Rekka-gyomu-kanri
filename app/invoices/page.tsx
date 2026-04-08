@@ -150,7 +150,7 @@ function InvoiceModal({
   }
 
   const allSections = newSection
-    ? [...new Set([...sections, newSection])]
+    ? Array.from(new Set([...sections, newSection]))
     : sections
 
   return (
@@ -382,7 +382,7 @@ export default function InvoicesPage() {
     setActiveSection('')
   }
 
-  const sections = [...new Set(records.map((r) => r.section))]
+  const sections = Array.from(new Set(records.map((r) => r.section)))
   const displaySection = activeSection || sections[0] || ''
   const filtered = records.filter((r) => r.section === displaySection)
 
