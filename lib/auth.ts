@@ -29,6 +29,17 @@ export const authOptions: NextAuthOptions = {
       if (account) {
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
+        // トークンをDBに保存（メンバーのスケジュール閲覧に使用）
+        if (token.email) {
+          const supabase = createServerSupabase()
+          await supabase
+            .from('app_users')
+            .update({
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+            })
+            .eq('email', token.email)
+        }
       }
       // roleが未取得の場合はDBから取得
       if (!token.role && token.email) {
