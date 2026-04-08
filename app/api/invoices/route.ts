@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createServerSupabase } from '@/lib/supabase'
 
+function calcTotal(items: { amount?: number; quantity?: number; unit_price?: number }[]) {
+  return items.reduce((sum, item) =>
+    sum + (item.amount ?? (item.quantity ?? 0) * (item.unit_price ?? 0)), 0)
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
@@ -11,17 +16,15 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const month = searchParams.get('month')
-  const section = searchParams.get('section')
 
   const supabase = createServerSupabase()
   let query = supabase
     .from('invoice_records')
     .select('*')
-    .order('section')
-    .order('number')
+    .eq('user_email', session.user.email)
+    .order('number', { ascending: true })
 
   if (month) query = query.eq('month', month)
-  if (section) query = query.eq('section', section)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -36,15 +39,31 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const supabase = createServerSupabase()
+  const userEmail = session.user.email
+  const month = body.month
 
-  // 合計金額を計算
-  const items = body.items ?? []
-  const total_amount = items.reduce((sum: number, item: { amount?: number; quantity?: number; unit_price?: number }) =>
-    sum + (item.amount ?? (item.quantity ?? 0) * (item.unit_price ?? 0)), 0)
+  // 自動採番：同月・同ユーザーの最大番号 + 1
+  const { data: maxRecord } = await supabase
+    .from('invoice_records')
+    .select('number')
+    .eq('month', month)
+    .eq('user_email', userEmail)
+    .order('number', { ascending: false })
+    .limit(1)
+    .single()
+
+  const nextNumber = (maxRecord?.number ?? 0) + 1
+  const total_amount = calcTotal(body.items ?? [])
 
   const { data, error } = await supabase
     .from('invoice_records')
-    .insert({ ...body, total_amount, updated_at: new Date().toISOString() })
+    .insert({
+      ...body,
+      user_email: userEmail,
+      number: nextNumber,
+      total_amount,
+      updated_at: new Date().toISOString(),
+    })
     .select()
     .single()
 
