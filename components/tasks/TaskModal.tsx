@@ -5,13 +5,20 @@ import { X } from 'lucide-react'
 import { Task, Priority, TaskStatus } from '@/app/tasks/page'
 import DriveFiles from '@/components/DriveFiles'
 
+interface Member {
+  id: string
+  email: string
+  name: string
+}
+
 interface TaskModalProps {
   task?: Task | null
+  currentUserEmail?: string
   onClose: () => void
   onSave: (data: Omit<Task, 'id' | 'created_at'>) => void
 }
 
-export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
+export default function TaskModal({ task, currentUserEmail, onClose, onSave }: TaskModalProps) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'medium')
@@ -19,12 +26,21 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const [dueDate, setDueDate] = useState(task?.due_date ?? '')
   const [driveFolderId, setDriveFolderId] = useState((task as Task & { drive_folder_id?: string })?.drive_folder_id ?? '')
   const [driveInput, setDriveInput] = useState(driveFolderId)
+  const [assignedTo, setAssignedTo] = useState((task as Task & { assigned_to_email?: string })?.assigned_to_email ?? '')
+  const [members, setMembers] = useState<Member[]>([])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [onClose])
+
+  useEffect(() => {
+    fetch('/api/members')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setMembers(data) })
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,6 +52,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       status,
       due_date: dueDate || null,
       drive_folder_id: driveFolderId.trim(),
+      assigned_to_email: assignedTo || null,
     } as Omit<Task, 'id' | 'created_at'>)
   }
 
@@ -73,6 +90,30 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               rows={3}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
             />
+          </div>
+
+          {/* 担当者 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">担当者</label>
+            <select
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+            >
+              <option value="">自分（担当者なし）</option>
+              {members
+                .filter((m) => m.email !== currentUserEmail)
+                .map((m) => (
+                  <option key={m.id} value={m.email}>
+                    {m.name || m.email}
+                  </option>
+                ))}
+            </select>
+            {assignedTo && (
+              <p className="text-[10px] text-blue-500 mt-1">
+                このタスクは {members.find((m) => m.email === assignedTo)?.name || assignedTo} に依頼されます
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3">

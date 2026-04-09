@@ -11,11 +11,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json()
   const supabase = createServerSupabase()
+  const email = session.user.email
+
+  // 作成者 or 担当者 どちらでも更新可能
   const { data, error } = await supabase
     .from('tasks')
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
+    .or(`user_email.eq.${email},assigned_to_email.eq.${email}`)
     .select()
     .single()
 
@@ -30,6 +33,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   }
 
   const supabase = createServerSupabase()
+  // 削除は作成者のみ可能
   const { error } = await supabase
     .from('tasks')
     .delete()

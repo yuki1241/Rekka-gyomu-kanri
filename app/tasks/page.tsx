@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Search, ChevronDown, Pencil, Trash2 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 import clsx from 'clsx'
 
@@ -16,7 +17,12 @@ export interface Task {
   status: TaskStatus
   due_date: string | null
   created_at: string
+  assigned_to_email?: string | null
+  assigned_by_email?: string | null
+  user_email?: string
 }
+
+type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me'
 
 const statusLabel: Record<TaskStatus, string> = {
   todo: '未着手',
@@ -39,6 +45,7 @@ type FilterStatus = 'all' | TaskStatus
 type FilterPriority = 'all' | Priority
 
 export default function TasksPage() {
+  const { data: session } = useSession()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -46,17 +53,33 @@ export default function TasksPage() {
   const [filterPriority, setFilterPriority] = useState<FilterPriority>('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [activeTab, setActiveTab] = useState<TabMode>('mine')
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({})
   const today = new Date().toISOString().split('T')[0]
+
+  // メンバー名をメールから引けるようにしておく
+  useEffect(() => {
+    fetch('/api/members')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const map: Record<string, string> = {}
+          for (const m of data) map[m.email] = m.name || m.email
+          setMemberNames(map)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/tasks')
+    const res = await fetch(`/api/tasks?mode=${activeTab}`)
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data)) setTasks(data)
     }
     setLoading(false)
-  }, [])
+  }, [activeTab])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
@@ -115,6 +138,18 @@ export default function TasksPage() {
     done: tasks.filter((t) => t.status === 'done').length,
   }
 
+  const getName = (email?: string | null) => {
+    if (!email) return ''
+    if (email === session?.user?.email) return '自分'
+    return memberNames[email] || email
+  }
+
+  const tabs: { mode: TabMode; label: string; icon: React.ReactNode; color: string }[] = [
+    { mode: 'mine', label: '自分のタスク', icon: null, color: 'bg-blue-600' },
+    { mode: 'assigned_by_me', label: '依頼中', icon: <SendHorizonal size={13} />, color: 'bg-orange-500' },
+    { mode: 'assigned_to_me', label: '依頼された', icon: <UserCheck size={13} />, color: 'bg-purple-600' },
+  ]
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -131,7 +166,38 @@ export default function TasksPage() {
         </button>
       </div>
 
-      {/* フィルタータブ */}
+      {/* タブ切り替え（自分・依頼中・依頼された） */}
+      <div className="flex items-center gap-2 mb-5">
+        {tabs.map((tab) => (
+          <button
+            key={tab.mode}
+            onClick={() => { setActiveTab(tab.mode); setFilterStatus('all') }}
+            className={clsx(
+              'flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl font-medium transition-all',
+              activeTab === tab.mode
+                ? `${tab.color} text-white shadow-sm`
+                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 依頼中タブの説明 */}
+      {activeTab === 'assigned_by_me' && (
+        <div className="mb-4 px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-xs text-orange-700">
+          あなたが他のメンバーに依頼しているタスクです。担当者のステータス更新がここに反映されます。
+        </div>
+      )}
+      {activeTab === 'assigned_to_me' && (
+        <div className="mb-4 px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700">
+          他のメンバーからあなたに依頼されたタスクです。ステータスを更新して進捗を報告できます。
+        </div>
+      )}
+
+      {/* ステータスフィルタータブ */}
       <div className="flex items-center gap-1 mb-5">
         {(['all', 'todo', 'in_progress', 'done'] as const).map((s) => (
           <button
@@ -139,7 +205,7 @@ export default function TasksPage() {
             onClick={() => setFilterStatus(s)}
             className={clsx(
               'px-4 py-1.5 text-sm rounded-lg font-medium transition-colors',
-              filterStatus === s ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+              filterStatus === s ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'
             )}
           >
             {s === 'all' ? 'すべて' : statusLabel[s]}
@@ -182,6 +248,15 @@ export default function TasksPage() {
             <tr className="border-b border-gray-100 bg-gray-50/50">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 w-8" />
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500">タスク名</th>
+              {activeTab === 'assigned_by_me' && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-orange-500 w-28">依頼先</th>
+              )}
+              {activeTab === 'assigned_to_me' && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-purple-500 w-28">依頼者</th>
+              )}
+              {activeTab === 'mine' && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">担当者</th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24">優先度</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">ステータス</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">期限</th>
@@ -191,19 +266,23 @@ export default function TasksPage() {
           <tbody className="divide-y divide-gray-50">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center text-gray-400 text-sm">
-                  読み込み中...
-                </td>
+                <td colSpan={7} className="px-5 py-16 text-center text-gray-400 text-sm">読み込み中...</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center text-gray-400 text-sm">
-                  タスクはありません
+                <td colSpan={7} className="px-5 py-16 text-center text-gray-400 text-sm">
+                  {activeTab === 'assigned_by_me' ? '依頼中のタスクはありません' :
+                   activeTab === 'assigned_to_me' ? '依頼されたタスクはありません' :
+                   'タスクはありません'}
                 </td>
               </tr>
             ) : (
               filtered.map((task) => {
                 const isOverdue = task.due_date && task.due_date < today && task.status !== 'done'
+                const canDelete = task.user_email === session?.user?.email
+                const assigneeName = getName(task.assigned_to_email)
+                const requesterName = getName(task.assigned_by_email)
+
                 return (
                   <tr key={task.id} className="hover:bg-gray-50/70 transition-colors group">
                     <td className="px-5 py-3.5">
@@ -229,6 +308,26 @@ export default function TasksPage() {
                       </p>
                       {task.description && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>
+                      )}
+                    </td>
+                    {/* 担当者・依頼先・依頼者カラム */}
+                    <td className="px-4 py-3.5">
+                      {activeTab === 'assigned_by_me' && assigneeName && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-medium">
+                          <SendHorizonal size={10} />
+                          {assigneeName}
+                        </span>
+                      )}
+                      {activeTab === 'assigned_to_me' && requesterName && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
+                          <UserCheck size={10} />
+                          {requesterName}
+                        </span>
+                      )}
+                      {activeTab === 'mine' && assigneeName && assigneeName !== '自分' && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                          {assigneeName}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3.5">
@@ -258,12 +357,14 @@ export default function TasksPage() {
                         >
                           <Pencil size={13} />
                         </button>
-                        <button
-                          onClick={() => handleDelete(task.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(task.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -277,6 +378,7 @@ export default function TasksPage() {
       {isModalOpen && (
         <TaskModal
           task={editingTask}
+          currentUserEmail={session?.user?.email ?? ''}
           onClose={() => { setIsModalOpen(false); setEditingTask(null) }}
           onSave={handleSave}
         />
