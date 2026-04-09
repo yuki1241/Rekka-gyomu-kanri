@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal } from 'lucide-react'
+import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal, Flame, AlertTriangle } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 import clsx from 'clsx'
 
@@ -279,12 +279,22 @@ export default function TasksPage() {
             ) : (
               filtered.map((task) => {
                 const isOverdue = task.due_date && task.due_date < today && task.status !== 'done'
+                const tomorrow = new Date()
+                tomorrow.setDate(tomorrow.getDate() + 1)
+                const tomorrowStr = tomorrow.toISOString().split('T')[0]
+                const isWarning = !isOverdue && task.due_date === tomorrowStr && task.status !== 'done'
                 const canDelete = task.user_email === session?.user?.email
                 const assigneeName = getName(task.assigned_to_email)
                 const requesterName = getName(task.assigned_by_email)
 
                 return (
-                  <tr key={task.id} className="hover:bg-gray-50/70 transition-colors group">
+                  <tr
+                    key={task.id}
+                    className={clsx(
+                      'transition-colors group',
+                      isOverdue ? 'task-burning' : isWarning ? 'task-warning' : 'hover:bg-gray-50/70'
+                    )}
+                  >
                     <td className="px-5 py-3.5">
                       <button
                         onClick={() => handleStatusToggle(task)}
@@ -342,8 +352,12 @@ export default function TasksPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       {task.due_date ? (
-                        <span className={clsx('text-xs', isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
-                          {task.due_date}{isOverdue && ' ⚠'}
+                        <span className={clsx('inline-flex items-center gap-1 text-xs font-medium',
+                          isOverdue ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-gray-500'
+                        )}>
+                          {isOverdue && <Flame size={12} className="animate-bounce" />}
+                          {isWarning && <AlertTriangle size={12} />}
+                          {task.due_date}
                         </span>
                       ) : (
                         <span className="text-xs text-gray-300">—</span>

@@ -29,3 +29,21 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
   border-color: #f97316 !important;
 }
+
+/* 期限切れ「燃えている」アニメーション */
+@keyframes burn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); background-color: rgba(254, 242, 242, 1); }
+  50% { box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.35); background-color: rgba(254, 226, 226, 1); }
+}
+.task-burning {
+  animation: burn-pulse 1.6s ease-in-out infinite;
+}
+
+/* 期限1日前「警告」アニメーション */
+@keyframes warn-pulse {
+  0%, 100% { background-color: rgba(255, 251, 235, 1); }
+  50% { background-color: rgba(254, 243, 199, 1); }
+}
+.task-warning {
+  animation: warn-pulse 2.4s ease-in-out infinite;
+}
