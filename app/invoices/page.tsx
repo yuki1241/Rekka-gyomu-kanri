@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, X, PlusCircle, MinusCircle, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, X, PlusCircle, MinusCircle, RefreshCw, FileSpreadsheet, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 
 // ---------- 型定義 ----------
@@ -296,6 +296,164 @@ function InvoiceModal({
   )
 }
 
+// ---------- インポートモーダル ----------
+const SPREADSHEET_ID = '1qLasN4V9t0wNgbPqBCDdhIKQoLaTZYe2z43mWjgfOdE'
+
+function ImportModal({
+  currentMonth,
+  onClose,
+  onDone,
+}: {
+  currentMonth: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [sheets, setSheets] = useState<{ title: string; sheetId: number }[]>([])
+  const [selectedSheet, setSelectedSheet] = useState('')
+  const [loadingSheets, setLoadingSheets] = useState(false)
+  const [preview, setPreview] = useState<{ company_name: string; total_amount: number }[]>([])
+  const [previewing, setPreviewing] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoadingSheets(true)
+    fetch(`/api/invoices/import?id=${SPREADSHEET_ID}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sheets) {
+          setSheets(data.sheets)
+          setSelectedSheet(data.sheets[0]?.title ?? '')
+        } else {
+          setError(data.error ?? 'シート取得に失敗しました')
+        }
+      })
+      .catch(() => setError('シート取得に失敗しました'))
+      .finally(() => setLoadingSheets(false))
+  }, [])
+
+  const handlePreview = async () => {
+    setPreviewing(true)
+    setError('')
+    setPreview([])
+    const res = await fetch('/api/invoices/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: true }),
+    })
+    const data = await res.json()
+    if (data.error) { setError(data.error); setPreviewing(false); return }
+    setPreview(data.preview ?? [])
+    setPreviewing(false)
+  }
+
+  const handleImport = async () => {
+    setImporting(true)
+    setError('')
+    const res = await fetch('/api/invoices/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: false }),
+    })
+    const data = await res.json()
+    if (data.error) { setError(data.error); setImporting(false); return }
+    setResult({ inserted: data.inserted, skipped: data.skipped })
+    setImporting(false)
+    onDone()
+  }
+
+  const [y, m] = currentMonth.split('-')
+  const monthLabel = `${y}年${Number(m)}月`
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-bold text-gray-900">スプレッドシートから取込</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{monthLabel}のデータとして取り込みます</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* シート選択 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">取込シートを選択</label>
+            {loadingSheets ? (
+              <p className="text-xs text-gray-400">シート一覧を取得中...</p>
+            ) : (
+              <div className="relative">
+                <select
+                  value={selectedSheet}
+                  onChange={(e) => { setSelectedSheet(e.target.value); setPreview([]); setResult(null) }}
+                  className="w-full appearance-none px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                >
+                  {sheets.map((s) => <option key={s.sheetId} value={s.title}>{s.title}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+
+          {/* プレビュー結果 */}
+          {preview.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-gray-700 mb-2">プレビュー（先頭10件）</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {preview.map((c, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-600">
+                    <span className="truncate max-w-[200px]">{c.company_name}</span>
+                    <span className="text-gray-400 flex-shrink-0">¥{(c.total_amount ?? 0).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 完了メッセージ */}
+          {result && (
+            <div className="bg-green-50 border border-green-100 rounded-lg px-4 py-3 text-sm text-green-700">
+              取込完了: <strong>{result.inserted}件</strong> を追加しました
+              {result.skipped > 0 && <span className="text-gray-400 ml-2">（{result.skipped}件は重複のためスキップ）</span>}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
+              閉じる
+            </button>
+            {!result && (
+              <>
+                <button
+                  onClick={handlePreview}
+                  disabled={previewing || loadingSheets}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+                >
+                  {previewing ? '確認中...' : 'プレビュー確認'}
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={importing || loadingSheets}
+                  className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center gap-2"
+                >
+                  <FileSpreadsheet size={14} />
+                  {importing ? '取込中...' : '取込実行'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ---------- メインページ ----------
 export default function InvoicesPage() {
   const now = new Date()
@@ -308,6 +466,7 @@ export default function InvoicesPage() {
   const [editingRecord, setEditingRecord] = useState<InvoiceRecord | null>(null)
   const [carryingOver, setCarryingOver] = useState(false)
   const [carryMsg, setCarryMsg] = useState('')
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   const fetchRecords = useCallback(async () => {
     setLoading(true)
@@ -422,6 +581,13 @@ export default function InvoicesPage() {
           <p className="text-gray-500 mt-1 text-sm">請求書チェックリスト</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setImportModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm border border-green-200 rounded-lg hover:bg-green-50 text-green-700 transition-colors"
+          >
+            <FileSpreadsheet size={14} />
+            スプレッドシートから取込
+          </button>
           <button
             onClick={handleCarryForward}
             disabled={carryingOver}
@@ -671,6 +837,14 @@ export default function InvoicesPage() {
           currentMonth={currentMonth}
           onClose={() => { setModalOpen(false); setEditingRecord(null) }}
           onSave={handleSave}
+        />
+      )}
+
+      {importModalOpen && (
+        <ImportModal
+          currentMonth={currentMonth}
+          onClose={() => setImportModalOpen(false)}
+          onDone={() => { fetchRecords(); setImportModalOpen(false) }}
         />
       )}
     </div>
