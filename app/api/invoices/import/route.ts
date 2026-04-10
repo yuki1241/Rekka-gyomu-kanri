@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, month, dryRun } = await req.json()
+  const { spreadsheetId, sheetName, month, dryRun, salesPerson } = await req.json()
   if (!spreadsheetId || !month) {
     return NextResponse.json({ error: 'spreadsheetId and month are required' }, { status: 400 })
   }
@@ -172,8 +172,14 @@ export async function POST(req: NextRequest) {
 
   const companies = parseSheet(rows)
 
+  // 営業担当の一覧（重複なし）
+  const salesPersons = Array.from(new Set(companies.map((c) => c.sales_person).filter(Boolean)))
+
+  // 営業担当フィルター
+  const filtered = salesPerson ? companies.filter((c) => c.sales_person === salesPerson) : companies
+
   if (dryRun) {
-    return NextResponse.json({ preview: companies.slice(0, 10), total: companies.length })
+    return NextResponse.json({ preview: filtered.slice(0, 10), total: filtered.length, salesPersons })
   }
 
   // DBに保存
@@ -202,7 +208,7 @@ export async function POST(req: NextRequest) {
   let inserted = 0
   let skipped = 0
 
-  for (const company of companies) {
+  for (const company of filtered) {
     if (existingNames.has(company.company_name)) {
       skipped++
       continue

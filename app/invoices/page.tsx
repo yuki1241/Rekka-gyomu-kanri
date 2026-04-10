@@ -311,6 +311,9 @@ function ImportModal({
   const [sheets, setSheets] = useState<{ title: string; sheetId: number }[]>([])
   const [selectedSheet, setSelectedSheet] = useState('')
   const [loadingSheets, setLoadingSheets] = useState(false)
+  const [salesPersons, setSalesPersons] = useState<string[]>([])
+  const [selectedSalesPerson, setSelectedSalesPerson] = useState('')
+  const [loadingSalesPersons, setLoadingSalesPersons] = useState(false)
   const [preview, setPreview] = useState<{ company_name: string; total_amount: number }[]>([])
   const [previewing, setPreviewing] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -333,6 +336,27 @@ function ImportModal({
       .finally(() => setLoadingSheets(false))
   }, [])
 
+  // シート変更時に営業担当一覧を取得
+  useEffect(() => {
+    if (!selectedSheet) return
+    setLoadingSalesPersons(true)
+    setSalesPersons([])
+    setSelectedSalesPerson('')
+    setPreview([])
+    setResult(null)
+    fetch('/api/invoices/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: true }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.salesPersons) setSalesPersons(data.salesPersons)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSalesPersons(false))
+  }, [selectedSheet, currentMonth])
+
   const handlePreview = async () => {
     setPreviewing(true)
     setError('')
@@ -340,7 +364,7 @@ function ImportModal({
     const res = await fetch('/api/invoices/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: true }),
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: true, salesPerson: selectedSalesPerson || undefined }),
     })
     const data = await res.json()
     if (data.error) { setError(data.error); setPreviewing(false); return }
@@ -354,7 +378,7 @@ function ImportModal({
     const res = await fetch('/api/invoices/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: false }),
+      body: JSON.stringify({ spreadsheetId: SPREADSHEET_ID, sheetName: selectedSheet, month: currentMonth, dryRun: false, salesPerson: selectedSalesPerson || undefined }),
     })
     const data = await res.json()
     if (data.error) { setError(data.error); setImporting(false); return }
@@ -389,13 +413,35 @@ function ImportModal({
               <div className="relative">
                 <select
                   value={selectedSheet}
-                  onChange={(e) => { setSelectedSheet(e.target.value); setPreview([]); setResult(null) }}
+                  onChange={(e) => setSelectedSheet(e.target.value)}
                   className="w-full appearance-none px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
                 >
                   {sheets.map((s) => <option key={s.sheetId} value={s.title}>{s.title}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
+            )}
+          </div>
+
+          {/* 営業担当フィルター */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">営業担当を選択</label>
+            {loadingSalesPersons ? (
+              <p className="text-xs text-gray-400">担当者一覧を取得中...</p>
+            ) : salesPersons.length > 0 ? (
+              <div className="relative">
+                <select
+                  value={selectedSalesPerson}
+                  onChange={(e) => { setSelectedSalesPerson(e.target.value); setPreview([]); setResult(null) }}
+                  className="w-full appearance-none px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                >
+                  <option value="">全員</option>
+                  {salesPersons.map((sp) => <option key={sp} value={sp}>{sp}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">シートを選択すると担当者一覧が表示されます</p>
             )}
           </div>
 
