@@ -54,7 +54,7 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
         token.expiresAt = account.expires_at ?? Math.floor(Date.now() / 1000) + 3600
-        // トークンをDBに保存（メンバーのスケジュール閲覧に使用）
+        // トークンをDBに保存 & roleを取得
         if (token.email) {
           const supabase = createServerSupabase()
           await supabase
@@ -64,6 +64,12 @@ export const authOptions: NextAuthOptions = {
               refresh_token: account.refresh_token,
             })
             .eq('email', token.email)
+          const { data } = await supabase
+            .from('app_users')
+            .select('role')
+            .eq('email', token.email)
+            .single()
+          token.role = data?.role ?? 'viewer'
         }
         return token
       }
