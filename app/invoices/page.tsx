@@ -513,6 +513,8 @@ export default function InvoicesPage() {
   const [carryingOver, setCarryingOver] = useState(false)
   const [carryMsg, setCarryMsg] = useState('')
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const fetchRecords = useCallback(async () => {
     setLoading(true)
@@ -531,6 +533,43 @@ export default function InvoicesPage() {
     const d = new Date(y, m - 1 + delta, 1)
     setCurrentMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     setCarryMsg('')
+    setSelectedIds(new Set())
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === records.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(records.map((r) => r.id)))
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`選択した${selectedIds.size}件を削除しますか？`)) return
+    setBulkDeleting(true)
+    await Promise.all(Array.from(selectedIds).map((id) => fetch(`/api/invoices/${id}`, { method: 'DELETE' })))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    fetchRecords()
+  }
+
+  const handleDeleteAll = async () => {
+    if (records.length === 0) return
+    if (!confirm(`この月の全${records.length}件を削除しますか？\nこの操作は元に戻せません。`)) return
+    setBulkDeleting(true)
+    await Promise.all(records.map((r) => fetch(`/api/invoices/${r.id}`, { method: 'DELETE' })))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    fetchRecords()
   }
 
   // ステータストグル（即時保存）
@@ -627,6 +666,26 @@ export default function InvoicesPage() {
           <p className="text-gray-500 mt-1 text-sm">請求書チェックリスト</p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600 transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              選択削除（{selectedIds.size}件）
+            </button>
+          )}
+          {records.length > 0 && selectedIds.size === 0 && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-red-100 rounded-lg hover:bg-red-50 text-red-400 transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              一括削除
+            </button>
+          )}
           <button
             onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm border border-green-200 rounded-lg hover:bg-green-50 text-green-700 transition-colors"
@@ -693,6 +752,14 @@ export default function InvoicesPage() {
           <table className="w-full min-w-[1100px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/80">
+                <th className="px-3 py-2.5 w-8">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300"
+                    checked={records.length > 0 && selectedIds.size === records.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 w-8">#</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 w-36">会社名</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 w-20">営業担当</th>
@@ -702,12 +769,20 @@ export default function InvoicesPage() {
                 <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-500 w-16">月額</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-blue-500 w-44 border-l border-gray-100">アシスタント報酬</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-purple-500 w-36 border-l border-gray-100">ディレクター報酬</th>
-                <th className="px-3 py-2.5 w-14" />
+                <th className="px-3 py-2.5 w-16" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {records.map((record) => (
-                <tr key={record.id} className="hover:bg-gray-50/50 transition-colors group align-top">
+                <tr key={record.id} className={clsx('transition-colors align-top', selectedIds.has(record.id) ? 'bg-blue-50/60' : 'hover:bg-gray-50/50')}>
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={selectedIds.has(record.id)}
+                      onChange={() => toggleSelect(record.id)}
+                    />
+                  </td>
                   <td className="px-3 py-3 text-xs text-gray-400">{record.number ?? '—'}</td>
                   <td className="px-3 py-3">
                     <p className="text-xs font-semibold text-gray-800">{record.company_name}</p>
@@ -774,16 +849,18 @@ export default function InvoicesPage() {
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => { setEditingRecord(record); setModalOpen(true) }}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        title="編集"
                       >
                         <Pencil size={13} />
                       </button>
                       <button
                         onClick={() => handleDelete(record.id, record.company_name)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="削除"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -794,7 +871,7 @@ export default function InvoicesPage() {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50">
-                <td colSpan={4} className="px-3 py-2.5 text-xs font-semibold text-gray-600 text-right">合計（{records.length}件）</td>
+                <td colSpan={5} className="px-3 py-2.5 text-xs font-semibold text-gray-600 text-right">合計（{records.length}件）</td>
                 <td className="px-3 py-2.5 text-right text-sm font-bold text-gray-900">¥{grandTotal.toLocaleString()}</td>
                 <td colSpan={5} />
               </tr>

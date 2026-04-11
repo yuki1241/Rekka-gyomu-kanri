@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
   Phone, Target, BarChart2, Users, TrendingUp,
@@ -32,6 +33,20 @@ const adminItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const [assignedCount, setAssignedCount] = useState(0)
+
+  useEffect(() => {
+    if (!session?.user?.email) return
+    fetch('/api/tasks?mode=assigned_to_me')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const pending = data.filter((t: { status: string }) => t.status !== 'done').length
+          setAssignedCount(pending)
+        }
+      })
+      .catch(() => {})
+  }, [session?.user?.email])
 
   if (pathname === '/login') return null
 
@@ -65,6 +80,7 @@ export default function Sidebar() {
           {menuItems.map((item) => {
             const Icon = item.icon
             const active = pathname === item.href
+            const isTask = item.href === '/tasks'
             return (
               <li key={item.href}>
                 <Link
@@ -77,7 +93,12 @@ export default function Sidebar() {
                   )}
                 >
                   <Icon size={15} />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {isTask && assignedCount > 0 && (
+                    <span className="ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      {assignedCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             )
