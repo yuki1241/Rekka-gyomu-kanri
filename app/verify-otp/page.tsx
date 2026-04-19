@@ -17,6 +17,7 @@ export default function VerifyOtpPage() {
   const [countdown, setCountdown] = useState(0)
   const [sent, setSent] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const hasSentRef = useRef(false) // 複数回送信防止
 
   const sendOtp = useCallback(async () => {
     setSending(true)
@@ -32,14 +33,15 @@ export default function VerifyOtpPage() {
     setSending(false)
   }, [])
 
-  // セッション確認後に自動送信
+  // セッション確認後に自動送信（ref で確実に1回だけ実行）
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login')
-    } else if (status === 'authenticated' && !sent) {
+    } else if (status === 'authenticated' && !hasSentRef.current) {
+      hasSentRef.current = true
       sendOtp()
     }
-  }, [status, router, sendOtp, sent])
+  }, [status, router, sendOtp])
 
   // カウントダウン
   useEffect(() => {

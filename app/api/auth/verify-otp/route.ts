@@ -18,15 +18,21 @@ export async function POST(req: NextRequest) {
   const email = session.user.email
   const supabase = createServerSupabase()
 
-  const { data } = await supabase
+  const now = new Date().toISOString()
+  const { data, error: dbError } = await supabase
     .from('otp_codes')
     .select('*')
     .eq('email', email)
     .eq('code', code.trim())
-    .gt('expires_at', new Date().toISOString())
+    .gt('expires_at', now)
     .single()
 
-  if (!data) {
+  if (dbError || !data) {
+    console.error('[verify-otp] lookup failed:', { email, code: code.trim(), now, dbError })
+    // 期限切れ無視でコードだけ一致するか確認（デバッグ用）
+    const { data: anyRow } = await supabase
+      .from('otp_codes').select('code,expires_at').eq('email', email).single()
+    console.error('[verify-otp] row in DB:', anyRow)
     return NextResponse.json({ error: '認証コードが正しくないか、期限切れです' }, { status: 400 })
   }
 
