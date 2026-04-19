@@ -41,7 +41,7 @@ export default function Sidebar() {
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
-          const pending = data.filter((t: { status: string }) => t.status !== 'done').length
+          const pending = data.filter((t: { status: string }) => t.status === 'todo').length
           setAssignedCount(pending)
         }
       })
