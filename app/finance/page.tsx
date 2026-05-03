@@ -620,6 +620,7 @@ export default function ProspectsPage() {
   }
 
   const updateProspect = async (id: string, form: Partial<ProspectClient>) => {
+    const currentProspect = prospects.find((p) => p.id === id)
     const res = await fetch(`/api/prospects/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -628,6 +629,20 @@ export default function ProspectsPage() {
     const data = await res.json()
     setProspects((prev) => prev.map((p) => p.id === id ? data : p))
     setEditingProspect(null)
+
+    // 成約になった瞬間にプロジェクト自動作成
+    if (form.status === '成約' && currentProspect?.status !== '成約') {
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.company_name ?? currentProspect?.company_name ?? '新規プロジェクト',
+          description: form.service_content ?? currentProspect?.service_content ?? '',
+          color: '#10B981',
+          prospect_id: id,
+        }),
+      })
+    }
   }
 
   const deleteProspect = async (id: string) => {

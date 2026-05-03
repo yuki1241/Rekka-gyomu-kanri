@@ -11,6 +11,7 @@ interface Project {
   name: string
   description: string
   color: string
+  prospect_id?: string
 }
 
 const COLUMNS: { key: TaskStatus; label: string; color: string }[] = [
@@ -84,11 +85,28 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
       fetch(`/api/projects/${params.id}`),
       fetch(`/api/tasks?project_id=${params.id}`),
     ])
-    if (projRes.ok) setProject(await projRes.json())
+    const proj: Project | null = projRes.ok ? await projRes.json() : null
+    if (proj) setProject(proj)
+
+    let allTasks: Task[] = []
     if (taskRes.ok) {
       const data = await taskRes.json()
-      if (Array.isArray(data)) setTasks(data)
+      if (Array.isArray(data)) allTasks = data
     }
+
+    // 見込みリスト連動タスクを追加取得・マージ
+    if (proj?.prospect_id) {
+      const prospectTaskRes = await fetch(`/api/tasks?prospect_id=${proj.prospect_id}`)
+      if (prospectTaskRes.ok) {
+        const prospectData = await prospectTaskRes.json()
+        if (Array.isArray(prospectData)) {
+          const existingIds = new Set(allTasks.map((t) => t.id))
+          allTasks = [...allTasks, ...prospectData.filter((t: Task) => !existingIds.has(t.id))]
+        }
+      }
+    }
+
+    setTasks(allTasks)
     setLoading(false)
   }, [params.id])
 
@@ -210,6 +228,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         </button>
                       </div>
                     </div>
+                    {task.prospect_name && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 mt-0.5">
+                        見込み: {task.prospect_name}
+                      </span>
+                    )}
                     {task.description && (
                       <p className="text-xs text-gray-400 mt-1 line-clamp-2">{task.description}</p>
                     )}
