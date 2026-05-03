@@ -20,6 +20,8 @@ export interface Task {
   assigned_to_email?: string | null
   assigned_by_email?: string | null
   user_email?: string
+  prospect_id?: string | null
+  prospect_name?: string | null
 }
 
 type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me'
@@ -316,6 +318,11 @@ export default function TasksPage() {
                       <p className={clsx('text-sm font-medium', task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800')}>
                         {task.title}
                       </p>
+                      {task.prospect_name && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 mt-0.5">
+                          見込み: {task.prospect_name}
+                        </span>
+                      )}
                       {task.description && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>
                       )}

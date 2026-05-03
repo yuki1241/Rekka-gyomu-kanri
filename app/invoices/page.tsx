@@ -65,10 +65,13 @@ function InvoiceModal({
 }) {
   const [form, setForm] = useState(() => {
     if (record) {
-      // assistantsが5件未満なら補完
       const assistants = [...(record.assistants ?? [])]
       while (assistants.length < 5) assistants.push({ name: '', amount: 0 })
-      return { ...record, assistants }
+      // itemsがnullの場合（インポートデータなど）は空行を1つ追加
+      const items = (record.items && record.items.length > 0)
+        ? record.items.map((i) => ({ ...i }))
+        : [{ id: crypto.randomUUID(), name: '', quantity: 1, unit_price: 0, amount: 0 }]
+      return { ...record, assistants, items }
     }
     return emptyRecord(currentMonth)
   })
