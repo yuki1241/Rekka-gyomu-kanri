@@ -152,6 +152,10 @@ export default function TasksPage() {
     { mode: 'assigned_to_me', label: '依頼された', icon: <UserCheck size={13} />, color: 'bg-purple-600' },
   ]
 
+  const overdueTasks = tasks.filter(
+    (t) => t.due_date && t.due_date < today && t.status !== 'done' && activeTab === 'mine'
+  )
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -167,6 +171,21 @@ export default function TasksPage() {
           新規タスク
         </button>
       </div>
+
+      {/* 期限超過アラートバナー */}
+      {overdueTasks.length > 0 && (
+        <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+          <Flame size={16} className="text-red-500 mt-0.5 flex-shrink-0 animate-bounce" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-700">
+              期限超過のタスクが {overdueTasks.length} 件あります
+            </p>
+            <p className="text-xs text-red-500 mt-0.5">
+              {overdueTasks.map((t) => t.title).join('、')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* タブ切り替え（自分・依頼中・依頼された） */}
       <div className="flex items-center gap-2 mb-5">

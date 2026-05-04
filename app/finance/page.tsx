@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check, Plus, Trash2, ChevronDown, ChevronUp, Upload, CheckSquare } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { ChevronLeft, ChevronRight, Settings, X, MessageSquare, Check, Plus, Trash2, ChevronDown, ChevronUp, Upload, CheckSquare, Users } from 'lucide-react'
 import clsx from 'clsx'
 
 interface GoalTemplate {
@@ -31,7 +32,9 @@ interface ProspectClient {
   status: '見込み' | '成約' | '失注'
   contracted_at: string | null
   memo: string
+  term: '短期' | '中期' | '長期' | null
   created_at: string
+  user_email?: string
 }
 
 const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
@@ -323,6 +326,7 @@ function ProspectForm({ initial, onSave, onCancel }: {
     status: initial?.status ?? '見込み' as ProspectClient['status'],
     contracted_at: initial?.contracted_at ?? '',
     memo: initial?.memo ?? '',
+    term: initial?.term ?? null as ProspectClient['term'],
   })
 
   const set = (key: string, value: string) => setForm((p) => ({ ...p, [key]: value }))
@@ -346,7 +350,7 @@ function ProspectForm({ initial, onSave, onCancel }: {
         <input value={form.service_content} onChange={(e) => set('service_content', e.target.value)}
           placeholder="DXコンサル、kintone導入 など" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
       </div>
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-3 gap-3 mb-3">
         <div>
           <label className="text-[10px] font-semibold text-gray-500 mb-1 block">ステータス</label>
           <select value={form.status} onChange={(e) => set('status', e.target.value)}
@@ -354,6 +358,16 @@ function ProspectForm({ initial, onSave, onCancel }: {
             <option value="見込み">見込み</option>
             <option value="成約">成約</option>
             <option value="失注">失注</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">期間分類</label>
+          <select value={form.term ?? ''} onChange={(e) => set('term', e.target.value || null as unknown as string)}
+            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 bg-white">
+            <option value="">未設定</option>
+            <option value="短期">短期</option>
+            <option value="中期">中期</option>
+            <option value="長期">長期</option>
           </select>
         </div>
         {(form.status === '成約' || form.status === '失注') && (
@@ -373,7 +387,7 @@ function ProspectForm({ initial, onSave, onCancel }: {
       </div>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">キャンセル</button>
-        <button onClick={() => onSave({ ...form, contracted_at: form.contracted_at || null })}
+        <button onClick={() => onSave({ ...form, contracted_at: form.contracted_at || null, term: form.term || null })}
           className="px-4 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium">保存</button>
       </div>
     </div>
@@ -572,8 +586,17 @@ function TemplateEditor({ templates, onClose, onSaved }: {
   )
 }
 
+const TERM_STYLES: Record<string, string> = {
+  '短期': 'bg-red-100 text-red-700',
+  '中期': 'bg-yellow-100 text-yellow-700',
+  '長期': 'bg-blue-100 text-blue-700',
+}
+
 // メインページ
 export default function ProspectsPage() {
+  const { data: session } = useSession()
+  const isAdmin = (session?.user as { role?: string })?.role === 'admin'
+
   const [yearMonth, setYearMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -589,12 +612,15 @@ export default function ProspectsPage() {
   const [showProspectForm, setShowProspectForm] = useState(false)
   const [editingProspect, setEditingProspect] = useState<ProspectClient | null>(null)
   const [showLost, setShowLost] = useState(false)
+  const [adminViewAll, setAdminViewAll] = useState(false)
+  const [termFilter, setTermFilter] = useState<string>('all')
 
-  const fetchData = useCallback(async (ym: string) => {
+  const fetchData = useCallback(async (ym: string, all = false) => {
     setLoading(true)
+    const prospectsUrl = all ? '/api/prospects?all=1' : '/api/prospects'
     const [goalsRes, prospectsRes] = await Promise.all([
       fetch(`/api/goals?year_month=${ym}`),
-      fetch('/api/prospects'),
+      fetch(prospectsUrl),
     ])
     const data = await goalsRes.json()
     setTemplates(data.templates ?? [])
@@ -651,7 +677,7 @@ export default function ProspectsPage() {
     setProspects((prev) => prev.filter((p) => p.id !== id))
   }
 
-  useEffect(() => { fetchData(yearMonth) }, [yearMonth, fetchData])
+  useEffect(() => { fetchData(yearMonth, adminViewAll) }, [yearMonth, adminViewAll, fetchData])
 
   const getEntry = (templateId: string, weekNum: number): GoalEntry => {
     return entryMap[`${templateId}-${weekNum}`] ?? {
@@ -902,6 +928,44 @@ export default function ProspectsPage() {
       {/* 顧客管理セクション */}
       <div className="mt-10 space-y-6">
 
+        {/* 顧客管理ヘッダー */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-bold text-gray-800">顧客管理</h2>
+            {isAdmin && (
+              <button
+                onClick={() => setAdminViewAll((v) => !v)}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1 text-xs rounded-full font-medium transition-colors',
+                  adminViewAll
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                )}
+              >
+                <Users size={11} />
+                {adminViewAll ? '全員表示中' : '自分のみ'}
+              </button>
+            )}
+          </div>
+          {/* 期間フィルター */}
+          <div className="flex items-center gap-1">
+            {(['all', '短期', '中期', '長期'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTermFilter(t)}
+                className={clsx(
+                  'px-2.5 py-1 text-xs rounded-lg font-medium transition-colors',
+                  termFilter === t
+                    ? t === 'all' ? 'bg-gray-700 text-white' : `${TERM_STYLES[t]} font-bold`
+                    : 'text-gray-400 hover:bg-gray-100'
+                )}
+              >
+                {t === 'all' ? 'すべて' : t}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* 見込み中 */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -912,15 +976,17 @@ export default function ProspectsPage() {
                 {prospects.filter((p) => p.status === '見込み').length}件
               </span>
             </div>
-            <button
-              onClick={() => { setShowProspectForm(true); setEditingProspect(null) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
-            >
-              <Plus size={12} /> 追加
-            </button>
+            {!adminViewAll && (
+              <button
+                onClick={() => { setShowProspectForm(true); setEditingProspect(null) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+              >
+                <Plus size={12} /> 追加
+              </button>
+            )}
           </div>
 
-          {showProspectForm && !editingProspect && (
+          {showProspectForm && !editingProspect && !adminViewAll && (
             <div className="mb-3">
               <ProspectForm
                 onSave={addProspect}
@@ -929,47 +995,61 @@ export default function ProspectsPage() {
             </div>
           )}
 
-          {prospects.filter((p) => p.status === '見込み').length === 0 && !showProspectForm ? (
-            <div className="text-center py-8 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
-              見込み客を追加してください
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {prospects.filter((p) => p.status === '見込み').map((p) => (
-                <div key={p.id}>
-                  {editingProspect?.id === p.id ? (
-                    <ProspectForm
-                      initial={p}
-                      onSave={(form) => updateProspect(p.id, form)}
-                      onCancel={() => setEditingProspect(null)}
-                    />
-                  ) : (
-                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-orange-200 transition-colors shadow-sm">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
-                            {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
+          {(() => {
+            const filtered = prospects
+              .filter((p) => p.status === '見込み')
+              .filter((p) => termFilter === 'all' || p.term === termFilter)
+            if (filtered.length === 0 && !showProspectForm) return (
+              <div className="text-center py-8 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
+                見込み客を追加してください
+              </div>
+            )
+            return (
+              <div className="space-y-2">
+                {filtered.map((p) => (
+                  <div key={p.id}>
+                    {editingProspect?.id === p.id ? (
+                      <ProspectForm
+                        initial={p}
+                        onSave={(form) => updateProspect(p.id, form)}
+                        onCancel={() => setEditingProspect(null)}
+                      />
+                    ) : (
+                      <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-orange-200 transition-colors shadow-sm">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
+                              {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
+                              {p.term && (
+                                <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', TERM_STYLES[p.term])}>{p.term}</span>
+                              )}
+                              {adminViewAll && p.user_email && (
+                                <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>
+                              )}
+                            </div>
+                            {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
+                            {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
                           </div>
-                          {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
-                          {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
+                          {!adminViewAll && (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button onClick={() => setEditingProspect(p)}
+                                className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                              <button onClick={() => deleteProspect(p.id)}
+                                className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button onClick={() => setEditingProspect(p)}
-                            className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
-                          <button onClick={() => deleteProspect(p.id)}
-                            className="text-gray-300 hover:text-red-400 transition-colors p-1">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                        <ProspectTaskSection prospectId={p.id} prospectName={p.company_name} />
                       </div>
-                      <ProspectTaskSection prospectId={p.id} prospectName={p.company_name} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* 成約（選択月） */}
@@ -981,13 +1061,13 @@ export default function ProspectsPage() {
               {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).length}件
             </span>
           </div>
-          {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).length === 0 ? (
+          {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth) && (termFilter === 'all' || p.term === termFilter)).length === 0 ? (
             <div className="text-center py-6 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
               この月の成約はありません
             </div>
           ) : (
             <div className="space-y-2">
-              {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth)).map((p) => (
+              {prospects.filter((p) => p.status === '成約' && p.contracted_at?.startsWith(yearMonth) && (termFilter === 'all' || p.term === termFilter)).map((p) => (
                 <div key={p.id}>
                   {editingProspect?.id === p.id ? (
                     <ProspectForm
@@ -1003,19 +1083,23 @@ export default function ProspectsPage() {
                             <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
                             {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
                             <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">成約</span>
+                            {p.term && <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', TERM_STYLES[p.term])}>{p.term}</span>}
                             {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
+                            {adminViewAll && p.user_email && <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>}
                           </div>
                           {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
                           {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button onClick={() => setEditingProspect(p)}
-                            className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
-                          <button onClick={() => deleteProspect(p.id)}
-                            className="text-gray-300 hover:text-red-400 transition-colors p-1">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                        {!adminViewAll && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => setEditingProspect(p)}
+                              className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                            <button onClick={() => deleteProspect(p.id)}
+                              className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <ProspectTaskSection prospectId={p.id} prospectName={p.company_name} />
                     </div>

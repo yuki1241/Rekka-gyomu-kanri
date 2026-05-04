@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Bell, ChevronDown } from 'lucide-react'
 import { Task, Priority, TaskStatus } from '@/app/tasks/page'
 import DriveFiles from '@/components/DriveFiles'
 
@@ -29,6 +29,25 @@ export default function TaskModal({ task, currentUserEmail, onClose, onSave }: T
   const [assignedTo, setAssignedTo] = useState((task as Task & { assigned_to_email?: string })?.assigned_to_email ?? '')
   const [members, setMembers] = useState<Member[]>([])
 
+  // リマインダー
+  const t = task as Task & {
+    reminder_enabled?: boolean
+    reminder_interval?: number
+    reminder_unit?: string
+    reminder_start?: string
+    reminder_end_type?: string
+    reminder_end_date?: string
+    reminder_end_count?: number
+  }
+  const [reminderEnabled, setReminderEnabled] = useState(t?.reminder_enabled ?? false)
+  const [reminderInterval, setReminderInterval] = useState(t?.reminder_interval ?? 1)
+  const [reminderUnit, setReminderUnit] = useState(t?.reminder_unit ?? 'week')
+  const [reminderStart, setReminderStart] = useState(t?.reminder_start ?? new Date().toISOString().split('T')[0])
+  const [reminderEndType, setReminderEndType] = useState(t?.reminder_end_type ?? 'none')
+  const [reminderEndDate, setReminderEndDate] = useState(t?.reminder_end_date ?? '')
+  const [reminderEndCount, setReminderEndCount] = useState(t?.reminder_end_count ?? 30)
+  const [showReminder, setShowReminder] = useState(t?.reminder_enabled ?? false)
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handleKey)
@@ -53,6 +72,13 @@ export default function TaskModal({ task, currentUserEmail, onClose, onSave }: T
       due_date: dueDate || null,
       drive_folder_id: driveFolderId.trim(),
       assigned_to_email: assignedTo || null,
+      reminder_enabled: reminderEnabled,
+      reminder_interval: reminderEnabled ? reminderInterval : null,
+      reminder_unit: reminderEnabled ? reminderUnit : null,
+      reminder_start: reminderEnabled ? reminderStart : null,
+      reminder_end_type: reminderEnabled ? reminderEndType : null,
+      reminder_end_date: reminderEnabled && reminderEndType === 'date' ? reminderEndDate : null,
+      reminder_end_count: reminderEnabled && reminderEndType === 'count' ? reminderEndCount : null,
     } as Omit<Task, 'id' | 'created_at'>)
   }
 
@@ -167,6 +193,124 @@ export default function TaskModal({ task, currentUserEmail, onClose, onSave }: T
               />
             </div>
             <DriveFiles folderId={driveFolderId} />
+          </div>
+
+          {/* リマインダー設定 */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowReminder((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Bell size={14} className={reminderEnabled ? 'text-blue-500' : 'text-gray-400'} />
+                <span className="font-medium">リマインダー</span>
+                {reminderEnabled && (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">ON</span>
+                )}
+              </span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showReminder ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showReminder && (
+              <div className="px-4 pb-4 pt-1 bg-gray-50/50 border-t border-gray-100 space-y-3">
+                {/* ON/OFF */}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <div
+                      onClick={() => setReminderEnabled((v) => !v)}
+                      className={`w-9 h-5 rounded-full transition-colors cursor-pointer flex items-center px-0.5 ${reminderEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${reminderEnabled ? 'translate-x-4' : ''}`} />
+                    </div>
+                    <span className="text-xs text-gray-600">{reminderEnabled ? 'リマインド有効' : 'リマインドなし'}</span>
+                  </label>
+                </div>
+
+                {reminderEnabled && (
+                  <>
+                    {/* 繰り返し間隔 */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 mb-1 block">繰り返す間隔</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={reminderInterval}
+                          onChange={(e) => setReminderInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-16 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-center"
+                        />
+                        <select
+                          value={reminderUnit}
+                          onChange={(e) => setReminderUnit(e.target.value)}
+                          className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                        >
+                          <option value="day">日ごと</option>
+                          <option value="week">週間ごと</option>
+                          <option value="month">か月ごと</option>
+                          <option value="year">年ごと</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 開始日 */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 mb-1 block">開始</label>
+                      <input
+                        type="date"
+                        value={reminderStart}
+                        onChange={(e) => setReminderStart(e.target.value)}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </div>
+
+                    {/* 終了条件 */}
+                    <div>
+                      <label className="text-[10px] font-semibold text-gray-500 mb-1 block">終了</label>
+                      <div className="space-y-1.5">
+                        {[
+                          { value: 'none', label: 'なし' },
+                          { value: 'date', label: '終了日' },
+                          { value: 'count', label: '繰り返し回数' },
+                        ].map((opt) => (
+                          <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="reminder_end"
+                              value={opt.value}
+                              checked={reminderEndType === opt.value}
+                              onChange={() => setReminderEndType(opt.value)}
+                              className="text-blue-500"
+                            />
+                            <span className="text-xs text-gray-600">{opt.label}</span>
+                            {opt.value === 'date' && reminderEndType === 'date' && (
+                              <input
+                                type="date"
+                                value={reminderEndDate}
+                                onChange={(e) => setReminderEndDate(e.target.value)}
+                                className="ml-1 px-2 py-0.5 text-xs border border-gray-200 rounded focus:outline-none"
+                              />
+                            )}
+                            {opt.value === 'count' && reminderEndType === 'count' && (
+                              <div className="flex items-center gap-1 ml-1">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={reminderEndCount}
+                                  onChange={(e) => setReminderEndCount(Math.max(1, parseInt(e.target.value) || 1))}
+                                  className="w-14 px-2 py-0.5 text-xs border border-gray-200 rounded text-center focus:outline-none"
+                                />
+                                <span className="text-xs text-gray-500">回</span>
+                              </div>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
