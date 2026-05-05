@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('project_id')
   const prospectId = searchParams.get('prospect_id')
-  const mode = searchParams.get('mode') // 'mine' | 'assigned_by_me' | 'assigned_to_me'
+  const mode = searchParams.get('mode') // 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all'
 
   const supabase = createServerSupabase()
   const email = session.user.email
@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
   if (prospectId) {
     // 見込みリスト連動：prospect_idで絞り込み（ユーザー制限なし）
     query = query.eq('prospect_id', prospectId)
+  } else if (mode === 'all') {
+    // 全員のタスクを表示（ユーザー制限なし）
   } else if (mode === 'assigned_by_me') {
     // 自分が他人に依頼したタスク
     query = query

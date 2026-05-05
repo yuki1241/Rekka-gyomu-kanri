@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal, Flame, AlertTriangle } from 'lucide-react'
+import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal, Flame, AlertTriangle, Globe } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 import clsx from 'clsx'
 
@@ -24,7 +24,7 @@ export interface Task {
   prospect_name?: string | null
 }
 
-type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me'
+type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all'
 
 const statusLabel: Record<TaskStatus, string> = {
   todo: '未着手',
@@ -150,6 +150,7 @@ export default function TasksPage() {
     { mode: 'mine', label: '自分のタスク', icon: null, color: 'bg-blue-600' },
     { mode: 'assigned_by_me', label: '依頼中', icon: <SendHorizonal size={13} />, color: 'bg-orange-500' },
     { mode: 'assigned_to_me', label: '依頼された', icon: <UserCheck size={13} />, color: 'bg-purple-600' },
+    { mode: 'all', label: '全員のタスク', icon: <Globe size={13} />, color: 'bg-teal-600' },
   ]
 
   const overdueTasks = tasks.filter(
@@ -163,13 +164,15 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold text-gray-900">タスク</h1>
           <p className="text-gray-500 mt-1 text-sm">全 {tasks.length} 件</p>
         </div>
-        <button
-          onClick={() => { setEditingTask(null); setIsModalOpen(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-        >
-          <Plus size={16} />
-          新規タスク
-        </button>
+        {activeTab !== 'all' && (
+          <button
+            onClick={() => { setEditingTask(null); setIsModalOpen(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+          >
+            <Plus size={16} />
+            新規タスク
+          </button>
+        )}
       </div>
 
       {/* 期限超過アラートバナー */}
@@ -206,7 +209,7 @@ export default function TasksPage() {
         ))}
       </div>
 
-      {/* 依頼中タブの説明 */}
+      {/* タブ説明バナー */}
       {activeTab === 'assigned_by_me' && (
         <div className="mb-4 px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-xs text-orange-700">
           あなたが他のメンバーに依頼しているタスクです。担当者のステータス更新がここに反映されます。
@@ -215,6 +218,11 @@ export default function TasksPage() {
       {activeTab === 'assigned_to_me' && (
         <div className="mb-4 px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700">
           他のメンバーからあなたに依頼されたタスクです。ステータスを更新して進捗を報告できます。
+        </div>
+      )}
+      {activeTab === 'all' && (
+        <div className="mb-4 px-4 py-2.5 bg-teal-50 border border-teal-100 rounded-xl text-xs text-teal-700">
+          全メンバーのタスク一覧です。チーム全体の進捗を確認できます。編集・削除は自分のタスクのみ可能です。
         </div>
       )}
 
@@ -278,6 +286,9 @@ export default function TasksPage() {
               {activeTab === 'mine' && (
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">担当者</th>
               )}
+              {activeTab === 'all' && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-teal-600 w-28">メンバー</th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24">優先度</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">ステータス</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">期限</th>
@@ -294,6 +305,7 @@ export default function TasksPage() {
                 <td colSpan={7} className="px-5 py-16 text-center text-gray-400 text-sm">
                   {activeTab === 'assigned_by_me' ? '依頼中のタスクはありません' :
                    activeTab === 'assigned_to_me' ? '依頼されたタスクはありません' :
+                   activeTab === 'all' ? 'タスクがありません' :
                    'タスクはありません'}
                 </td>
               </tr>
@@ -304,9 +316,14 @@ export default function TasksPage() {
                 tomorrow.setDate(tomorrow.getDate() + 1)
                 const tomorrowStr = tomorrow.toISOString().split('T')[0]
                 const isWarning = !isOverdue && task.due_date === tomorrowStr && task.status !== 'done'
-                const canDelete = task.user_email === session?.user?.email
+                const isOwner = task.user_email === session?.user?.email
+                const isAssignee = task.assigned_to_email === session?.user?.email
+                const canEdit = isOwner || isAssignee
+                const canDelete = isOwner
                 const assigneeName = getName(task.assigned_to_email)
                 const requesterName = getName(task.assigned_by_email)
+                // 全員タブ: 担当者（assigned_to_email優先、なければuser_email）
+                const memberName = getName(task.assigned_to_email || task.user_email)
 
                 return (
                   <tr
@@ -317,21 +334,35 @@ export default function TasksPage() {
                     )}
                   >
                     <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => handleStatusToggle(task)}
-                        className={clsx(
-                          'w-4 h-4 rounded border-2 transition-colors flex items-center justify-center',
-                          task.status === 'done'
-                            ? 'bg-green-500 border-green-500'
-                            : 'border-gray-300 hover:border-blue-400'
-                        )}
-                      >
-                        {task.status === 'done' && (
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
-                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </button>
+                      {activeTab === 'all' ? (
+                        // 全員タブでは読み取り専用
+                        <div className={clsx(
+                          'w-4 h-4 rounded border-2 flex items-center justify-center',
+                          task.status === 'done' ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                        )}>
+                          {task.status === 'done' && (
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleStatusToggle(task)}
+                          className={clsx(
+                            'w-4 h-4 rounded border-2 transition-colors flex items-center justify-center',
+                            task.status === 'done'
+                              ? 'bg-green-500 border-green-500'
+                              : 'border-gray-300 hover:border-blue-400'
+                          )}
+                        >
+                          {task.status === 'done' && (
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <p className={clsx('text-sm font-medium', task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800')}>
@@ -346,7 +377,7 @@ export default function TasksPage() {
                         <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>
                       )}
                     </td>
-                    {/* 担当者・依頼先・依頼者カラム */}
+                    {/* 担当者・依頼先・依頼者・メンバーカラム */}
                     <td className="px-4 py-3.5">
                       {activeTab === 'assigned_by_me' && assigneeName && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-medium">
@@ -363,6 +394,16 @@ export default function TasksPage() {
                       {activeTab === 'mine' && assigneeName && assigneeName !== '自分' && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
                           {assigneeName}
+                        </span>
+                      )}
+                      {activeTab === 'all' && (
+                        <span className={clsx(
+                          'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium',
+                          isOwner || isAssignee
+                            ? 'bg-teal-50 text-teal-700'
+                            : 'bg-gray-100 text-gray-600'
+                        )}>
+                          {memberName || '—'}
                         </span>
                       )}
                     </td>
@@ -391,12 +432,14 @@ export default function TasksPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => { setEditingTask(task); setIsModalOpen(true) }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                        >
-                          <Pencil size={13} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => { setEditingTask(task); setIsModalOpen(true) }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
                         {canDelete && (
                           <button
                             onClick={() => handleDelete(task.id)}
