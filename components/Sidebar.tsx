@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
   Phone, Target, BarChart2, Users, TrendingUp,
-  PieChart, UserCog, LogOut, HardDrive, Flame, ClipboardList,
+  PieChart, UserCog, LogOut, HardDrive, Flame, ClipboardList, Lightbulb,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -23,6 +23,7 @@ const menuItems = [
   { href: '/members', label: 'メンバー', icon: Users },
   { href: '/invoices', label: '請求管理', icon: ClipboardList },
   { href: '/drive', label: 'Google Drive', icon: HardDrive },
+  { href: '/suggestions', label: '意見箱', icon: Lightbulb },
 ]
 
 const adminItems = [

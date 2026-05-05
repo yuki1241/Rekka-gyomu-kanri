@@ -84,15 +84,16 @@ export default function TaskModal({ task, currentUserEmail, onClose, onSave }: T
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-semibold text-gray-900">{task ? 'タスクを編集' : '新規タスク'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               タスク名 <span className="text-red-500">*</span>
@@ -313,7 +314,9 @@ export default function TaskModal({ task, currentUserEmail, onClose, onSave }: T
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
