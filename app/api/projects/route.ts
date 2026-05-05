@@ -8,10 +8,10 @@ export async function GET() {
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = createServerSupabase()
+  // 全メンバーのプロジェクトを返す
   const { data, error } = await supabase
     .from('projects')
     .select('*, tasks(count)')
-    .eq('user_email', session.user.email)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
   const supabase = createServerSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .insert({ ...body, user_email: session.user.email })
+    .insert({
+      ...body,
+      user_email: session.user.email,
+    })
     .select()
     .single()
 

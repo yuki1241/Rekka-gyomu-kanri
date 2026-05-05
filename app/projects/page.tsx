@@ -1,15 +1,25 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, X } from 'lucide-react'
 import Link from 'next/link'
 import clsx from 'clsx'
+import { useSession } from 'next-auth/react'
+
+interface Member {
+  id: string
+  email: string
+  name: string
+}
 
 interface Project {
   id: string
   name: string
   description: string
   color: string
+  user_email: string
+  sales_email: string | null
+  director_email: string | null
   created_at: string
   tasks: { count: number }[]
 }
@@ -19,14 +29,142 @@ const COLORS = [
   '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
 ]
 
+interface ProjectFormProps {
+  initial?: Project | null
+  members: Member[]
+  currentEmail: string
+  onSave: (data: { name: string; description: string; color: string; sales_email: string | null; director_email: string | null }) => void
+  onCancel: () => void
+  saving: boolean
+  isEdit?: boolean
+}
+
+function ProjectForm({ initial, members, currentEmail, onSave, onCancel, saving, isEdit }: ProjectFormProps) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [color, setColor] = useState(initial?.color ?? COLORS[0])
+  const [salesEmail, setSalesEmail] = useState(initial?.sales_email ?? '')
+  const [directorEmail, setDirectorEmail] = useState(initial?.director_email ?? '')
+
+  return (
+    <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-gray-900 text-sm">{isEdit ? 'プロジェクトを編集' : '新規プロジェクト作成'}</h2>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            プロジェクト名 <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="例：freee導入支援"
+            autoFocus
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="プロジェクトの概要（任意）"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">営業担当</label>
+            <select
+              value={salesEmail}
+              onChange={(e) => setSalesEmail(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+            >
+              <option value="">未設定</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.email}>
+                  {m.name || m.email}{m.email === currentEmail ? '（自分）' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">ディレクター担当</label>
+            <select
+              value={directorEmail}
+              onChange={(e) => setDirectorEmail(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+            >
+              <option value="">未設定</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.email}>
+                  {m.name || m.email}{m.email === currentEmail ? '（自分）' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-2">カラー</label>
+          <div className="flex gap-2">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={clsx(
+                  'w-7 h-7 rounded-full transition-transform',
+                  color === c ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-110'
+                )}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={() => {
+              if (!name.trim()) return
+              onSave({
+                name: name.trim(),
+                description: description.trim(),
+                color,
+                sales_email: salesEmail || null,
+                director_email: directorEmail || null,
+              })
+            }}
+            disabled={saving || !name.trim()}
+            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+          >
+            {saving ? '保存中...' : isEdit ? '保存する' : '作成する'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            キャンセル
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProjectsPage() {
+  const { data: session } = useSession()
+  const currentEmail = session?.user?.email ?? ''
+
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [color, setColor] = useState(COLORS[0])
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [saving, setSaving] = useState(false)
+  const [members, setMembers] = useState<Member[]>([])
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({})
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -40,22 +178,50 @@ export default function ProjectsPage() {
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
+  useEffect(() => {
+    fetch('/api/members')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setMembers(data)
+          const map: Record<string, string> = {}
+          for (const m of data) map[m.email] = m.name || m.email
+          setMemberNames(map)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const getName = (email?: string | null) => {
+    if (!email) return null
+    if (email === currentEmail) return '自分'
+    return memberNames[email] || email
+  }
+
+  const handleCreate = async (data: { name: string; description: string; color: string; sales_email: string | null; director_email: string | null }) => {
     setSaving(true)
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), description: description.trim(), color }),
+      body: JSON.stringify(data),
     })
     if (res.ok) {
-      setName('')
-      setDescription('')
-      setColor(COLORS[0])
       setShowForm(false)
       fetchProjects()
     }
+    setSaving(false)
+  }
+
+  const handleEdit = async (data: { name: string; description: string; color: string; sales_email: string | null; director_email: string | null }) => {
+    if (!editingProject) return
+    setSaving(true)
+    await fetch(`/api/projects/${editingProject.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    setEditingProject(null)
+    fetchProjects()
     setSaving(false)
   }
 
@@ -73,7 +239,7 @@ export default function ProjectsPage() {
           <p className="text-gray-500 mt-1 text-sm">全 {projects.length} 件</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setShowForm(true); setEditingProject(null) }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
         >
           <Plus size={16} />
@@ -83,67 +249,26 @@ export default function ProjectsPage() {
 
       {/* 作成フォーム */}
       {showForm && (
-        <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-5 mb-6">
-          <h2 className="font-semibold text-gray-900 mb-4 text-sm">新規プロジェクト作成</h2>
-          <form onSubmit={handleCreate} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                プロジェクト名 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="例：freee導入支援"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="プロジェクトの概要（任意）"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">カラー</label>
-              <div className="flex gap-2">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className={clsx(
-                      'w-7 h-7 rounded-full transition-transform',
-                      color === c ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-110'
-                    )}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-              >
-                {saving ? '作成中...' : '作成する'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                キャンセル
-              </button>
-            </div>
-          </form>
-        </div>
+        <ProjectForm
+          members={members}
+          currentEmail={currentEmail}
+          onSave={handleCreate}
+          onCancel={() => setShowForm(false)}
+          saving={saving}
+        />
+      )}
+
+      {/* 編集フォーム */}
+      {editingProject && (
+        <ProjectForm
+          initial={editingProject}
+          members={members}
+          currentEmail={currentEmail}
+          onSave={handleEdit}
+          onCancel={() => setEditingProject(null)}
+          saving={saving}
+          isEdit
+        />
       )}
 
       {/* プロジェクト一覧 */}
@@ -159,9 +284,9 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-3 gap-4">
           {projects.map((project) => {
             const taskCount = project.tasks?.[0]?.count ?? 0
+            const isOwner = project.user_email === currentEmail
             return (
               <div key={project.id} className="group relative bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                {/* カラーバー */}
                 <div className="h-2" style={{ backgroundColor: project.color }} />
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-2">
@@ -170,16 +295,49 @@ export default function ProjectsPage() {
                         {project.name}
                       </h3>
                     </Link>
-                    <button
-                      onClick={() => handleDelete(project.id, project.name)}
-                      className="opacity-0 group-hover:opacity-100 ml-2 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all flex-shrink-0"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {isOwner && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
+                        <button
+                          onClick={() => { setEditingProject(project); setShowForm(false) }}
+                          className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
+                        >
+                          編集
+                        </button>
+                        <button
+                          onClick={() => handleDelete(project.id, project.name)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
+
                   {project.description && (
                     <p className="text-xs text-gray-500 mb-3 line-clamp-2">{project.description}</p>
                   )}
+
+                  {/* 担当者バッジ */}
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {project.sales_email && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 font-medium">
+                        <span className="text-orange-400">営</span>
+                        {getName(project.sales_email)}
+                      </span>
+                    )}
+                    {project.director_email && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-medium">
+                        <span className="text-purple-400">D</span>
+                        {getName(project.director_email)}
+                      </span>
+                    )}
+                    {project.user_email && !isOwner && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-500">
+                        作成: {getName(project.user_email)}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-400">{taskCount} タスク</span>
                     <Link

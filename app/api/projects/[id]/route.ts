@@ -8,11 +8,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = createServerSupabase()
+  // 全メンバーが閲覧可能（user_email制限なし）
   const { data, error } = await supabase
     .from('projects')
     .select('*')
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
