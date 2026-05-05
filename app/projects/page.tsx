@@ -295,22 +295,22 @@ export default function ProjectsPage() {
                         {project.name}
                       </h3>
                     </Link>
-                    {isOwner && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
+                      {isOwner && (
                         <button
                           onClick={() => { setEditingProject(project); setShowForm(false) }}
                           className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
                         >
                           編集
                         </button>
-                        <button
-                          onClick={() => handleDelete(project.id, project.name)}
-                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        onClick={() => handleDelete(project.id, project.name)}
+                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
 
                   {project.description && (
