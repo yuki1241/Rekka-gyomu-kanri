@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
     query = query
       .eq('assigned_to_email', email)
       .neq('user_email', email)
-  } else {
+  } else if (!projectId) {
     // 自分のタスク（自分で作って自分担当 or 担当者未設定）
+    // ※ projectIdがある場合はユーザー制限なし → プロジェクト内は全員分表示
     query = query
       .eq('user_email', email)
       .or(`assigned_to_email.is.null,assigned_to_email.eq.${email}`)
