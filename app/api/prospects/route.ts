@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const showAll = searchParams.get('all') === '1'
+  const targetEmail = searchParams.get('target_email') // 特定メンバーを指定（管理者のみ）
   const isAdmin = (session.user as { role?: string }).role === 'admin'
 
   const supabase = createServerSupabase()
@@ -17,9 +18,14 @@ export async function GET(req: NextRequest) {
     .select('*')
     .order('created_at', { ascending: false })
 
-  if (!showAll || !isAdmin) {
+  if (isAdmin && targetEmail) {
+    // 特定メンバーの見込みリストを表示
+    query = query.eq('user_email', targetEmail)
+  } else if (!showAll || !isAdmin) {
+    // 自分の見込みリストのみ
     query = query.eq('user_email', session.user.email)
   }
+  // showAll && isAdmin の場合はフィルターなし（全員分）
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

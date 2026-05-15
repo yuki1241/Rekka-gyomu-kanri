@@ -592,10 +592,17 @@ const TERM_STYLES: Record<string, string> = {
   '長期': 'bg-blue-100 text-blue-700',
 }
 
+interface AppMember {
+  id: string
+  email: string
+  name: string
+}
+
 // メインページ
 export default function ProspectsPage() {
   const { data: session } = useSession()
   const isAdmin = (session?.user as { role?: string })?.role === 'admin'
+  const currentEmail = session?.user?.email ?? ''
 
   const [yearMonth, setYearMonth] = useState(() => {
     const now = new Date()
@@ -612,12 +619,38 @@ export default function ProspectsPage() {
   const [showProspectForm, setShowProspectForm] = useState(false)
   const [editingProspect, setEditingProspect] = useState<ProspectClient | null>(null)
   const [showLost, setShowLost] = useState(false)
-  const [adminViewAll, setAdminViewAll] = useState(false)
   const [termFilter, setTermFilter] = useState<string>('all')
 
-  const fetchData = useCallback(async (ym: string, all = false) => {
+  // 管理者用メンバーフィルター（'self' = 自分, 'all' = 全員, メールアドレス = 特定メンバー）
+  const [memberFilter, setMemberFilter] = useState<string>('self')
+  const [members, setMembers] = useState<AppMember[]>([])
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({})
+
+  // メンバー一覧取得（管理者のみ）
+  useEffect(() => {
+    if (!isAdmin) return
+    fetch('/api/members')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setMembers(data)
+          const map: Record<string, string> = {}
+          for (const m of data) map[m.email] = m.name || m.email
+          setMemberNames(map)
+        }
+      })
+      .catch(() => {})
+  }, [isAdmin])
+
+  const buildProspectsUrl = (filter: string) => {
+    if (filter === 'all') return '/api/prospects?all=1'
+    if (filter !== 'self') return `/api/prospects?target_email=${encodeURIComponent(filter)}`
+    return '/api/prospects'
+  }
+
+  const fetchData = useCallback(async (ym: string, filter = 'self') => {
     setLoading(true)
-    const prospectsUrl = all ? '/api/prospects?all=1' : '/api/prospects'
+    const prospectsUrl = buildProspectsUrl(filter)
     const [goalsRes, prospectsRes] = await Promise.all([
       fetch(`/api/goals?year_month=${ym}`),
       fetch(prospectsUrl),
@@ -677,7 +710,7 @@ export default function ProspectsPage() {
     setProspects((prev) => prev.filter((p) => p.id !== id))
   }
 
-  useEffect(() => { fetchData(yearMonth, adminViewAll) }, [yearMonth, adminViewAll, fetchData])
+  useEffect(() => { fetchData(yearMonth, memberFilter) }, [yearMonth, memberFilter, fetchData])
 
   const getEntry = (templateId: string, weekNum: number): GoalEntry => {
     return entryMap[`${templateId}-${weekNum}`] ?? {
@@ -796,6 +829,28 @@ export default function ProspectsPage() {
             <h1 className="text-2xl font-bold text-gray-900">見込みリスト</h1>
             <p className="text-gray-500 mt-0.5 text-sm">KGI・KPI・KDIの目標管理</p>
           </div>
+          {/* 管理者用メンバーフィルター */}
+          {isAdmin && members.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-2 px-3 py-1.5 bg-purple-50 border border-purple-100 rounded-xl">
+              <Users size={13} className="text-purple-500 flex-shrink-0" />
+              <select
+                value={memberFilter}
+                onChange={(e) => {
+                  setMemberFilter(e.target.value)
+                  setTermFilter('all')
+                }}
+                className="text-xs text-purple-700 bg-transparent border-none outline-none font-medium cursor-pointer pr-1"
+              >
+                <option value="self">自分のみ</option>
+                <option value="all">全員</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.email}>
+                    {m.name || m.email}{m.email === currentEmail ? '（自分）' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -932,19 +987,10 @@ export default function ProspectsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-base font-bold text-gray-800">顧客管理</h2>
-            {isAdmin && (
-              <button
-                onClick={() => setAdminViewAll((v) => !v)}
-                className={clsx(
-                  'flex items-center gap-1.5 px-3 py-1 text-xs rounded-full font-medium transition-colors',
-                  adminViewAll
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                )}
-              >
-                <Users size={11} />
-                {adminViewAll ? '全員表示中' : '自分のみ'}
-              </button>
+            {isAdmin && memberFilter !== 'self' && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                {memberFilter === 'all' ? '全員表示中' : `${memberNames[memberFilter] || memberFilter} の見込みリスト`}
+              </span>
             )}
           </div>
           {/* 期間フィルター */}
@@ -976,7 +1022,7 @@ export default function ProspectsPage() {
                 {prospects.filter((p) => p.status === '見込み').length}件
               </span>
             </div>
-            {!adminViewAll && (
+            {memberFilter === 'self' && (
               <button
                 onClick={() => { setShowProspectForm(true); setEditingProspect(null) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
@@ -986,7 +1032,7 @@ export default function ProspectsPage() {
             )}
           </div>
 
-          {showProspectForm && !editingProspect && !adminViewAll && (
+          {showProspectForm && !editingProspect && memberFilter === 'self' && (
             <div className="mb-3">
               <ProspectForm
                 onSave={addProspect}
@@ -1024,14 +1070,16 @@ export default function ProspectsPage() {
                               {p.term && (
                                 <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', TERM_STYLES[p.term])}>{p.term}</span>
                               )}
-                              {adminViewAll && p.user_email && (
-                                <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>
+                              {memberFilter !== 'self' && p.user_email && (
+                                <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">
+                                  {memberNames[p.user_email] || p.user_email}
+                                </span>
                               )}
                             </div>
                             {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
                             {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
                           </div>
-                          {!adminViewAll && (
+                          {memberFilter === 'self' && (
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button onClick={() => setEditingProspect(p)}
                                 className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
@@ -1085,12 +1133,12 @@ export default function ProspectsPage() {
                             <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">成約</span>
                             {p.term && <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', TERM_STYLES[p.term])}>{p.term}</span>}
                             {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
-                            {adminViewAll && p.user_email && <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>}
+                            {memberFilter !== 'self' && p.user_email && <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>}
                           </div>
                           {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
                           {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
                         </div>
-                        {!adminViewAll && (
+                        {memberFilter === 'self' && (
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <button onClick={() => setEditingProspect(p)}
                               className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
