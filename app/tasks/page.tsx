@@ -349,8 +349,9 @@ export default function TasksPage() {
                 const isWarning = !isOverdue && task.due_date === tomorrowStr && task.status !== 'done'
                 const isOwner = task.user_email === session?.user?.email
                 const isAssignee = task.assigned_to_email === session?.user?.email
-                const canEdit = isOwner || isAssignee
-                const canDelete = isOwner
+                // mine/archive タブはAPIが自分のタスクのみ返すため常に操作可能
+                const canEdit = activeTab === 'mine' || activeTab === 'archive' || activeTab === 'assigned_to_me' || isOwner || isAssignee
+                const canDelete = activeTab === 'mine' || activeTab === 'archive' || isOwner
                 const assigneeName = getName(task.assigned_to_email)
                 const requesterName = getName(task.assigned_by_email)
                 // 全員タブ: 担当者（assigned_to_email優先、なければuser_email）
@@ -467,23 +468,23 @@ export default function TasksPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1">
                         {activeTab === 'archive' ? (
                           // アーカイブタブ：復元・完全削除ボタン
                           <>
                             <button
                               onClick={() => handleRestore(task.id)}
                               title="復元"
-                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                              className="p-1.5 text-gray-300 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
                             >
-                              <ArchiveRestore size={13} />
+                              <ArchiveRestore size={14} />
                             </button>
                             <button
                               onClick={() => handleDelete(task.id)}
                               title="完全に削除"
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                              className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
                             </button>
                           </>
                         ) : (
@@ -492,26 +493,28 @@ export default function TasksPage() {
                             {canEdit && (
                               <button
                                 onClick={() => { setEditingTask(task); setIsModalOpen(true) }}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="編集"
+                                className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                               >
-                                <Pencil size={13} />
+                                <Pencil size={14} />
                               </button>
                             )}
                             {canDelete && (
                               <button
                                 onClick={() => handleArchive(task.id)}
                                 title="アーカイブ"
-                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                                className="p-1.5 text-gray-300 hover:text-amber-500 hover:bg-amber-50 rounded-md transition-colors"
                               >
-                                <Archive size={13} />
+                                <Archive size={14} />
                               </button>
                             )}
                             {canDelete && (
                               <button
                                 onClick={() => handleDelete(task.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                title="削除"
+                                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </>
