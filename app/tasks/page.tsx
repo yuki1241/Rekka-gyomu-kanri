@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal, Flame, AlertTriangle, Globe } from 'lucide-react'
+import { Plus, Search, ChevronDown, Pencil, Trash2, UserCheck, SendHorizonal, Flame, AlertTriangle, Globe, Archive, ArchiveRestore } from 'lucide-react'
 import TaskModal from '@/components/tasks/TaskModal'
 import clsx from 'clsx'
 
@@ -22,9 +22,10 @@ export interface Task {
   user_email?: string
   prospect_id?: string | null
   prospect_name?: string | null
+  archived?: boolean
 }
 
-type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all'
+type TabMode = 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all' | 'archive'
 
 const statusLabel: Record<TaskStatus, string> = {
   todo: '未着手',
@@ -110,6 +111,24 @@ export default function TasksPage() {
     fetchTasks()
   }
 
+  const handleArchive = async (id: string) => {
+    await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: true }),
+    })
+    fetchTasks()
+  }
+
+  const handleRestore = async (id: string) => {
+    await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: false }),
+    })
+    fetchTasks()
+  }
+
   const handleStatusToggle = async (task: Task) => {
     const next: Record<TaskStatus, TaskStatus> = {
       todo: 'in_progress',
@@ -151,6 +170,7 @@ export default function TasksPage() {
     { mode: 'assigned_by_me', label: '依頼中', icon: <SendHorizonal size={13} />, color: 'bg-orange-500' },
     { mode: 'assigned_to_me', label: '依頼された', icon: <UserCheck size={13} />, color: 'bg-purple-600' },
     { mode: 'all', label: '全員のタスク', icon: <Globe size={13} />, color: 'bg-teal-600' },
+    { mode: 'archive', label: 'アーカイブ', icon: <Archive size={13} />, color: 'bg-gray-500' },
   ]
 
   const overdueTasks = tasks.filter(
@@ -164,7 +184,7 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold text-gray-900">タスク</h1>
           <p className="text-gray-500 mt-1 text-sm">全 {tasks.length} 件</p>
         </div>
-        {activeTab !== 'all' && (
+        {activeTab !== 'all' && activeTab !== 'archive' && (
           <button
             onClick={() => { setEditingTask(null); setIsModalOpen(true) }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
@@ -225,50 +245,57 @@ export default function TasksPage() {
           全メンバーのタスク一覧です。チーム全体の進捗を確認できます。編集・削除は自分のタスクのみ可能です。
         </div>
       )}
-
-      {/* ステータスフィルタータブ */}
-      <div className="flex items-center gap-1 mb-5">
-        {(['all', 'todo', 'in_progress', 'done'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className={clsx(
-              'px-4 py-1.5 text-sm rounded-lg font-medium transition-colors',
-              filterStatus === s ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'
-            )}
-          >
-            {s === 'all' ? 'すべて' : statusLabel[s]}
-            <span className="ml-1.5 text-xs opacity-70">{counts[s]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* 検索・フィルター */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="タスクを検索..."
-            className="w-full pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
+      {activeTab === 'archive' && (
+        <div className="mb-4 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-600">
+          アーカイブ済みのタスクです。「復元」で通常タスクに戻すか、「完全に削除」で削除できます。
         </div>
-        <div className="relative">
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value as FilterPriority)}
-            className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
-          >
-            <option value="all">優先度: すべて</option>
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-          </select>
-          <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        </div>
-      </div>
+      )}
+
+      {/* ステータスフィルター・検索（アーカイブタブでは非表示） */}
+      {activeTab !== 'archive' && (
+        <>
+          <div className="flex items-center gap-1 mb-5">
+            {(['all', 'todo', 'in_progress', 'done'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                className={clsx(
+                  'px-4 py-1.5 text-sm rounded-lg font-medium transition-colors',
+                  filterStatus === s ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'
+                )}
+              >
+                {s === 'all' ? 'すべて' : statusLabel[s]}
+                <span className="ml-1.5 text-xs opacity-70">{counts[s]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="relative flex-1 max-w-xs">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="タスクを検索..."
+                className="w-full pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+              />
+            </div>
+            <div className="relative">
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value as FilterPriority)}
+                className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+              >
+                <option value="all">優先度: すべて</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* テーブル */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -289,6 +316,9 @@ export default function TasksPage() {
               {activeTab === 'all' && (
                 <th className="px-4 py-3 text-left text-xs font-semibold text-teal-600 w-28">メンバー</th>
               )}
+              {activeTab === 'archive' && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">ステータス</th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-24">優先度</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">ステータス</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">期限</th>
@@ -306,6 +336,7 @@ export default function TasksPage() {
                   {activeTab === 'assigned_by_me' ? '依頼中のタスクはありません' :
                    activeTab === 'assigned_to_me' ? '依頼されたタスクはありません' :
                    activeTab === 'all' ? 'タスクがありません' :
+                   activeTab === 'archive' ? 'アーカイブ済みのタスクはありません' :
                    'タスクはありません'}
                 </td>
               </tr>
@@ -406,6 +437,11 @@ export default function TasksPage() {
                           {memberName || '—'}
                         </span>
                       )}
+                      {activeTab === 'archive' && (
+                        <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', statusColor[task.status])}>
+                          {statusLabel[task.status]}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', priorityColor[task.priority])}>
@@ -432,21 +468,53 @@ export default function TasksPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {canEdit && (
-                          <button
-                            onClick={() => { setEditingTask(task); setIsModalOpen(true) }}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={() => handleDelete(task.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                        {activeTab === 'archive' ? (
+                          // アーカイブタブ：復元・完全削除ボタン
+                          <>
+                            <button
+                              onClick={() => handleRestore(task.id)}
+                              title="復元"
+                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                            >
+                              <ArchiveRestore size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(task.id)}
+                              title="完全に削除"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        ) : (
+                          // 通常タブ：編集・アーカイブ・削除ボタン
+                          <>
+                            {canEdit && (
+                              <button
+                                onClick={() => { setEditingTask(task); setIsModalOpen(true) }}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleArchive(task.id)}
+                                title="アーカイブ"
+                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                              >
+                                <Archive size={13} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(task.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

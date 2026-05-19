@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get('project_id')
   const prospectId = searchParams.get('prospect_id')
-  const mode = searchParams.get('mode') // 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all'
+  const mode = searchParams.get('mode') // 'mine' | 'assigned_by_me' | 'assigned_to_me' | 'all' | 'archive'
 
   const supabase = createServerSupabase()
   const email = session.user.email
@@ -22,27 +22,36 @@ export async function GET(req: NextRequest) {
     .select('*')
     .order('created_at', { ascending: false })
 
-  if (prospectId) {
+  if (mode === 'archive') {
+    // アーカイブ済みタスク（自分のもののみ）
+    query = query.eq('user_email', email).eq('archived', true)
+  } else if (prospectId) {
     // 見込みリスト連動：prospect_idで絞り込み（ユーザー制限なし）
-    query = query.eq('prospect_id', prospectId)
+    query = query.eq('prospect_id', prospectId).or('archived.is.null,archived.eq.false')
   } else if (mode === 'all') {
-    // 全員のタスクを表示（ユーザー制限なし）
+    // 全員のタスクを表示（アーカイブ除外）
+    query = query.or('archived.is.null,archived.eq.false')
   } else if (mode === 'assigned_by_me') {
-    // 自分が他人に依頼したタスク
+    // 自分が他人に依頼したタスク（アーカイブ除外）
     query = query
       .eq('assigned_by_email', email)
       .neq('assigned_to_email', email)
+      .or('archived.is.null,archived.eq.false')
   } else if (mode === 'assigned_to_me') {
-    // 他人から自分に依頼されたタスク
+    // 他人から自分に依頼されたタスク（アーカイブ除外）
     query = query
       .eq('assigned_to_email', email)
       .neq('user_email', email)
+      .or('archived.is.null,archived.eq.false')
   } else if (!projectId) {
-    // 自分のタスク（自分で作って自分担当 or 担当者未設定）
-    // ※ projectIdがある場合はユーザー制限なし → プロジェクト内は全員分表示
+    // 自分のタスク（アーカイブ除外）
     query = query
       .eq('user_email', email)
       .or(`assigned_to_email.is.null,assigned_to_email.eq.${email}`)
+      .or('archived.is.null,archived.eq.false')
+  } else {
+    // プロジェクト内タスク（アーカイブ除外）
+    query = query.or('archived.is.null,archived.eq.false')
   }
 
   if (projectId) query = query.eq('project_id', projectId)
