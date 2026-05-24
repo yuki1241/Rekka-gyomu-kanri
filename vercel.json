@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/suggestion-reminder",
       "schedule": "50 14 * * 0"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 2 1 * *"
     }
   ]
 }
