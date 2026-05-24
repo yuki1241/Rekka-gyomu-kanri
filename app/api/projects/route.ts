@@ -3,17 +3,24 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createServerSupabase } from '@/lib/supabase'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { searchParams } = new URL(req.url)
+  const showAll = searchParams.get('all') === '1'
+
   const supabase = createServerSupabase()
-  // 全メンバーのプロジェクトを返す
-  const { data, error } = await supabase
+  let query = supabase
     .from('projects')
     .select('*, tasks(count)')
     .order('created_at', { ascending: false })
 
+  if (!showAll) {
+    query = query.eq('user_email', session.user.email)
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }

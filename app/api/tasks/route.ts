@@ -44,11 +44,12 @@ export async function GET(req: NextRequest) {
       .neq('user_email', email)
       .or('archived.is.null,archived.eq.false')
   } else if (!projectId) {
-    // 自分のタスク（アーカイブ除外）
+    // 自分のタスク（アーカイブ除外・プロジェクト紐付きタスク除外）
     query = query
       .eq('user_email', email)
       .or(`assigned_to_email.is.null,assigned_to_email.eq.${email}`)
       .or('archived.is.null,archived.eq.false')
+      .is('project_id', null)
   } else {
     // プロジェクト内タスク（アーカイブ除外）
     query = query.or('archived.is.null,archived.eq.false')

@@ -165,10 +165,11 @@ export default function ProjectsPage() {
   const [saving, setSaving] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [memberNames, setMemberNames] = useState<Record<string, string>>({})
+  const [showAll, setShowAll] = useState(false)
 
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = useCallback(async (all: boolean) => {
     setLoading(true)
-    const res = await fetch('/api/projects')
+    const res = await fetch(all ? '/api/projects?all=1' : '/api/projects')
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data)) setProjects(data)
@@ -176,7 +177,7 @@ export default function ProjectsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchProjects() }, [fetchProjects])
+  useEffect(() => { fetchProjects(showAll) }, [fetchProjects, showAll])
 
   useEffect(() => {
     fetch('/api/members')
@@ -238,13 +239,35 @@ export default function ProjectsPage() {
           <h1 className="text-2xl font-bold text-gray-900">プロジェクト</h1>
           <p className="text-gray-500 mt-1 text-sm">全 {projects.length} 件</p>
         </div>
-        <button
-          onClick={() => { setShowForm(true); setEditingProject(null) }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-        >
-          <Plus size={16} />
-          新規プロジェクト
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-gray-100 rounded-lg p-1 text-xs font-medium">
+            <button
+              onClick={() => setShowAll(false)}
+              className={clsx(
+                'px-3 py-1.5 rounded-md transition-colors',
+                !showAll ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              自分のみ
+            </button>
+            <button
+              onClick={() => setShowAll(true)}
+              className={clsx(
+                'px-3 py-1.5 rounded-md transition-colors',
+                showAll ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              全員
+            </button>
+          </div>
+          <button
+            onClick={() => { setShowForm(true); setEditingProject(null) }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+          >
+            <Plus size={16} />
+            新規プロジェクト
+          </button>
+        </div>
       </div>
 
       {/* 作成フォーム */}
