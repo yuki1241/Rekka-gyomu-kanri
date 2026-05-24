@@ -219,28 +219,35 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
   const handleAiParse = async () => {
     if (!aiText.trim()) return
     setAiLoading(true)
-    const res = await fetch('/api/ai/parse-appointment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: aiText }),
-    })
-    if (res.ok) {
-      const data = await res.json()
-      setForm((f) => ({
-        ...f,
-        person_name: data.person_name || f.person_name,
-        company_name: data.company_name || f.company_name,
-        referred_by: data.referred_by || f.referred_by,
-        category: data.category || f.category,
-        keywords: Array.isArray(data.keywords) ? data.keywords.join(', ') : (data.keywords || f.keywords),
-        trouble_memo: data.trouble_memo || f.trouble_memo,
-        impression_memo: data.impression_memo || f.impression_memo,
-        action_next: data.action_next || f.action_next,
-        sale_amount: data.sale_amount != null ? String(data.sale_amount) : f.sale_amount,
-        status: data.status || f.status,
-      }))
-      setShowAiPanel(false)
-      setAiText('')
+    try {
+      const res = await fetch('/api/ai/parse-appointment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiText }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setForm((f) => ({
+          ...f,
+          person_name: data.person_name || f.person_name,
+          company_name: data.company_name || f.company_name,
+          referred_by: data.referred_by || f.referred_by,
+          category: data.category || f.category,
+          keywords: Array.isArray(data.keywords) ? data.keywords.join(', ') : (data.keywords || f.keywords),
+          trouble_memo: data.trouble_memo || f.trouble_memo,
+          impression_memo: data.impression_memo || f.impression_memo,
+          action_next: data.action_next || f.action_next,
+          sale_amount: data.sale_amount != null ? String(data.sale_amount) : f.sale_amount,
+          status: data.status || f.status,
+        }))
+        setShowAiPanel(false)
+        setAiText('')
+      } else {
+        const err = await res.json().catch(() => ({ error: 'エラーが発生しました' }))
+        alert(`AI解析に失敗しました。\n${err.error || 'エラーが発生しました'}\n\nVercelのEnvironment VariablesにGEMINI_API_KEYが設定されているか確認してください。`)
+      }
+    } catch {
+      alert('通信エラーが発生しました。ネットワーク接続を確認してください。')
     }
     setAiLoading(false)
   }
@@ -266,9 +273,9 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-4">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[95vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-semibold text-gray-900">{initial ? 'アポを編集' : '新規アポ記録'}</h2>
           <div className="flex items-center gap-2">
             <button
@@ -289,7 +296,7 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
 
         {/* AI貼り付けパネル */}
         {showAiPanel && (
-          <div className="px-6 py-4 bg-purple-50 border-b border-purple-100">
+          <div className="px-6 py-4 bg-purple-50 border-b border-purple-100 flex-shrink-0">
             <p className="text-xs font-medium text-purple-700 mb-2">
               議事録・メモを貼り付けてください。AIが自動でフォームに入力します。
             </p>
@@ -311,7 +318,7 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
           </div>
         )}
 
-        <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* 顔写真 */}
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0 border-2 border-gray-200">
@@ -494,7 +501,6 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
               </div>
             )}
           </div>
-        </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Google Drive フォルダ</label>
@@ -508,8 +514,9 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
             />
             <DriveFiles folderId={form.drive_folder_id} />
           </div>
+        </div>
 
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
           <button
             onClick={handleSave}
             disabled={saving || !form.person_name.trim()}
