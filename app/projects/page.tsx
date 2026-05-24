@@ -208,7 +208,7 @@ export default function ProjectsPage() {
     })
     if (res.ok) {
       setShowForm(false)
-      fetchProjects()
+      fetchProjects(showAll)
     }
     setSaving(false)
   }
@@ -222,14 +222,14 @@ export default function ProjectsPage() {
       body: JSON.stringify(data),
     })
     setEditingProject(null)
-    fetchProjects()
+    fetchProjects(showAll)
     setSaving(false)
   }
 
   const handleDelete = async (id: string, projectName: string) => {
     if (!confirm(`「${projectName}」を削除しますか？`)) return
     await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-    fetchProjects()
+    fetchProjects(showAll)
   }
 
   return (
