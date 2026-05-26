@@ -58,8 +58,9 @@ export async function uploadJsonToDrive(
     `--${boundary}--`,
   ].join('\r\n')
 
+  // supportsAllDrives=true で共有ドライブ（チームドライブ）にも対応
   const res = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
     {
       method: 'POST',
       headers: {
