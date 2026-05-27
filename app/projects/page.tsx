@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen, X } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, X, Users, UserPlus, Crown } from 'lucide-react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import { useSession } from 'next-auth/react'
@@ -10,6 +10,11 @@ interface Member {
   id: string
   email: string
   name: string
+}
+
+interface ProjectMember {
+  user_email: string
+  role: string
 }
 
 interface Project {
@@ -22,6 +27,7 @@ interface Project {
   director_email: string | null
   created_at: string
   tasks: { count: number }[]
+  project_members: ProjectMember[]
 }
 
 const COLORS = [
@@ -154,6 +160,148 @@ function ProjectForm({ initial, members, currentEmail, onSave, onCancel, saving,
   )
 }
 
+// ---------- メンバー管理モーダル ----------
+function MemberManageModal({
+  project,
+  members,
+  memberNames,
+  currentEmail,
+  onClose,
+}: {
+  project: Project
+  members: Member[]
+  memberNames: Record<string, string>
+  currentEmail: string
+  onClose: () => void
+}) {
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([])
+  const [adding, setAdding] = useState(false)
+  const [selectedEmail, setSelectedEmail] = useState('')
+
+  const fetchMembers = useCallback(async () => {
+    const res = await fetch(`/api/projects/${project.id}/members`)
+    if (res.ok) setProjectMembers(await res.json())
+  }, [project.id])
+
+  useEffect(() => { fetchMembers() }, [fetchMembers])
+
+  const handleAdd = async () => {
+    if (!selectedEmail) return
+    setAdding(true)
+    await fetch(`/api/projects/${project.id}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_email: selectedEmail }),
+    })
+    setSelectedEmail('')
+    fetchMembers()
+    setAdding(false)
+  }
+
+  const handleRemove = async (email: string) => {
+    if (!confirm(`${memberNames[email] || email} を外しますか？`)) return
+    await fetch(`/api/projects/${project.id}/members`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_email: email }),
+    })
+    fetchMembers()
+  }
+
+  const alreadyAdded = projectMembers.map((m) => m.user_email)
+  const addableMembers = members.filter((m) => !alreadyAdded.includes(m.email))
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">メンバー管理</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{project.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {/* 現在のメンバー一覧 */}
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">現在のメンバー</p>
+            <div className="space-y-2">
+              {projectMembers.map((m) => (
+                <div key={m.user_email} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium text-blue-700">
+                      {(memberNames[m.user_email] || m.user_email).charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">
+                        {memberNames[m.user_email] || m.user_email}
+                        {m.user_email === currentEmail && <span className="text-gray-400">（自分）</span>}
+                      </p>
+                      <p className="text-xs text-gray-400">{m.user_email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {m.role === 'owner' ? (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded-full font-medium">
+                        <Crown size={10} />作成者
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">メンバー</span>
+                        {m.user_email !== currentEmail && (
+                          <button
+                            onClick={() => handleRemove(m.user_email)}
+                            className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* メンバー追加 */}
+          {addableMembers.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">メンバーを追加</p>
+              <div className="flex gap-2">
+                <select
+                  value={selectedEmail}
+                  onChange={(e) => setSelectedEmail(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                >
+                  <option value="">メンバーを選択</option>
+                  {addableMembers.map((m) => (
+                    <option key={m.email} value={m.email}>
+                      {m.name || m.email}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAdd}
+                  disabled={!selectedEmail || adding}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+                >
+                  <UserPlus size={14} />
+                  追加
+                </button>
+              </div>
+            </div>
+          )}
+          {addableMembers.length === 0 && projectMembers.length > 0 && (
+            <p className="text-xs text-gray-400 text-center py-2">全メンバーが追加済みです</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProjectsPage() {
   const { data: session } = useSession()
   const currentEmail = session?.user?.email ?? ''
@@ -166,6 +314,7 @@ export default function ProjectsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [memberNames, setMemberNames] = useState<Record<string, string>>({})
   const [showAll, setShowAll] = useState(false)
+  const [managingMembersProject, setManagingMembersProject] = useState<Project | null>(null)
 
   const fetchProjects = useCallback(async (all: boolean) => {
     setLoading(true)
@@ -294,6 +443,16 @@ export default function ProjectsPage() {
         />
       )}
 
+      {managingMembersProject && (
+        <MemberManageModal
+          project={managingMembersProject}
+          members={members}
+          memberNames={memberNames}
+          currentEmail={currentEmail}
+          onClose={() => { setManagingMembersProject(null); fetchProjects(showAll) }}
+        />
+      )}
+
       {/* プロジェクト一覧 */}
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">読み込み中...</div>
@@ -308,6 +467,7 @@ export default function ProjectsPage() {
           {projects.map((project) => {
             const taskCount = project.tasks?.[0]?.count ?? 0
             const isOwner = project.user_email === currentEmail
+            const projectMembers = project.project_members ?? []
             return (
               <div key={project.id} className="group relative bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <div className="h-2" style={{ backgroundColor: project.color }} />
@@ -320,19 +480,28 @@ export default function ProjectsPage() {
                     </Link>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
                       {isOwner && (
-                        <button
-                          onClick={() => { setEditingProject(project); setShowForm(false) }}
-                          className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
-                        >
-                          編集
-                        </button>
+                        <>
+                          <button
+                            onClick={() => { setEditingProject(project); setShowForm(false) }}
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
+                          >
+                            編集
+                          </button>
+                          <button
+                            onClick={() => setManagingMembersProject(project)}
+                            className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                            title="メンバー管理"
+                          >
+                            <Users size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(project.id, project.name)}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={() => handleDelete(project.id, project.name)}
-                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
                     </div>
                   </div>
 
@@ -354,7 +523,7 @@ export default function ProjectsPage() {
                         {getName(project.director_email)}
                       </span>
                     )}
-                    {project.user_email && !isOwner && (
+                    {!isOwner && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-500">
                         作成: {getName(project.user_email)}
                       </span>
@@ -362,7 +531,28 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{taskCount} タスク</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{taskCount} タスク</span>
+                      {/* メンバーアバター */}
+                      {projectMembers.length > 0 && (
+                        <div className="flex items-center -space-x-1.5">
+                          {projectMembers.slice(0, 4).map((m) => (
+                            <div
+                              key={m.user_email}
+                              title={memberNames[m.user_email] || m.user_email}
+                              className="w-5 h-5 rounded-full bg-blue-200 border border-white flex items-center justify-center text-[9px] font-bold text-blue-700"
+                            >
+                              {(memberNames[m.user_email] || m.user_email).charAt(0)}
+                            </div>
+                          ))}
+                          {projectMembers.length > 4 && (
+                            <div className="w-5 h-5 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[9px] text-gray-500">
+                              +{projectMembers.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <Link
                       href={`/projects/${project.id}`}
                       className="text-xs text-blue-600 hover:underline font-medium"
