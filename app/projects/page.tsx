@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen, X, Users, UserPlus, Crown } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, X, Users, UserPlus, Crown, Archive, ArchiveRestore } from 'lucide-react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import { useSession } from 'next-auth/react'
@@ -26,6 +26,7 @@ interface Project {
   sales_email: string | null
   director_email: string | null
   created_at: string
+  archived: boolean
   tasks: { count: number }[]
   project_members: ProjectMember[]
 }
@@ -314,11 +315,15 @@ export default function ProjectsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [memberNames, setMemberNames] = useState<Record<string, string>>({})
   const [showAll, setShowAll] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const [managingMembersProject, setManagingMembersProject] = useState<Project | null>(null)
 
-  const fetchProjects = useCallback(async (all: boolean) => {
+  const fetchProjects = useCallback(async (all: boolean, archived: boolean) => {
     setLoading(true)
-    const res = await fetch(all ? '/api/projects?all=1' : '/api/projects')
+    const params = new URLSearchParams()
+    if (all) params.set('all', '1')
+    if (archived) params.set('archived', '1')
+    const res = await fetch(`/api/projects?${params.toString()}`)
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data)) setProjects(data)
@@ -326,7 +331,7 @@ export default function ProjectsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchProjects(showAll) }, [fetchProjects, showAll])
+  useEffect(() => { fetchProjects(showAll, showArchived) }, [fetchProjects, showAll, showArchived])
 
   useEffect(() => {
     fetch('/api/members')
@@ -357,7 +362,7 @@ export default function ProjectsPage() {
     })
     if (res.ok) {
       setShowForm(false)
-      fetchProjects(showAll)
+      fetchProjects(showAll, showArchived)
     }
     setSaving(false)
   }
@@ -371,14 +376,23 @@ export default function ProjectsPage() {
       body: JSON.stringify(data),
     })
     setEditingProject(null)
-    fetchProjects(showAll)
+    fetchProjects(showAll, showArchived)
     setSaving(false)
   }
 
   const handleDelete = async (id: string, projectName: string) => {
     if (!confirm(`「${projectName}」を削除しますか？`)) return
     await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-    fetchProjects(showAll)
+    fetchProjects(showAll, showArchived)
+  }
+
+  const handleArchive = async (id: string, archive: boolean) => {
+    await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: archive }),
+    })
+    fetchProjects(showAll, showArchived)
   }
 
   return (
@@ -389,33 +403,37 @@ export default function ProjectsPage() {
           <p className="text-gray-500 mt-1 text-sm">全 {projects.length} 件</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* アーカイブ切り替え */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 text-xs font-medium">
             <button
-              onClick={() => setShowAll(false)}
+              onClick={() => setShowArchived(false)}
               className={clsx(
                 'px-3 py-1.5 rounded-md transition-colors',
-                !showAll ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                !showArchived ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               )}
             >
-              自分のみ
+              アクティブ
             </button>
             <button
-              onClick={() => setShowAll(true)}
+              onClick={() => setShowArchived(true)}
               className={clsx(
-                'px-3 py-1.5 rounded-md transition-colors',
-                showAll ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                'flex items-center gap-1 px-3 py-1.5 rounded-md transition-colors',
+                showArchived ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               )}
             >
-              全員
+              <Archive size={11} />
+              アーカイブ
             </button>
           </div>
-          <button
-            onClick={() => { setShowForm(true); setEditingProject(null) }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-          >
-            <Plus size={16} />
-            新規プロジェクト
-          </button>
+          {!showArchived && (
+            <button
+              onClick={() => { setShowForm(true); setEditingProject(null) }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+            >
+              <Plus size={16} />
+              新規プロジェクト
+            </button>
+          )}
         </div>
       </div>
 
@@ -449,7 +467,7 @@ export default function ProjectsPage() {
           members={members}
           memberNames={memberNames}
           currentEmail={currentEmail}
-          onClose={() => { setManagingMembersProject(null); fetchProjects(showAll) }}
+          onClose={() => { setManagingMembersProject(null); fetchProjects(showAll, showArchived) }}
         />
       )}
 
@@ -459,8 +477,16 @@ export default function ProjectsPage() {
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-gray-400">
           <FolderOpen size={40} className="mb-3 opacity-30" />
-          <p className="text-sm">プロジェクトがありません</p>
-          <p className="text-xs mt-1">「新規プロジェクト」から作成してください</p>
+          {showArchived ? (
+            <>
+              <p className="text-sm">アーカイブ済みのプロジェクトはありません</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm">プロジェクトがありません</p>
+              <p className="text-xs mt-1">「新規プロジェクト」から作成してください</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
@@ -481,19 +507,39 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
                       {isOwner && (
                         <>
-                          <button
-                            onClick={() => { setEditingProject(project); setShowForm(false) }}
-                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
-                          >
-                            編集
-                          </button>
-                          <button
-                            onClick={() => setManagingMembersProject(project)}
-                            className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                            title="メンバー管理"
-                          >
-                            <Users size={12} />
-                          </button>
+                          {!showArchived && (
+                            <>
+                              <button
+                                onClick={() => { setEditingProject(project); setShowForm(false) }}
+                                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
+                              >
+                                編集
+                              </button>
+                              <button
+                                onClick={() => setManagingMembersProject(project)}
+                                className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                                title="メンバー管理"
+                              >
+                                <Users size={12} />
+                              </button>
+                              <button
+                                onClick={() => handleArchive(project.id, true)}
+                                className="p-1 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded transition-colors"
+                                title="アーカイブ"
+                              >
+                                <Archive size={12} />
+                              </button>
+                            </>
+                          )}
+                          {showArchived && (
+                            <button
+                              onClick={() => handleArchive(project.id, false)}
+                              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="アーカイブ解除"
+                            >
+                              <ArchiveRestore size={12} />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(project.id, project.name)}
                             className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"

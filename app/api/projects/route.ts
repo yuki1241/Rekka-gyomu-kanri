@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
 
   const memberIds = (memberRows ?? []).map((r) => r.project_id as string)
 
+  const { searchParams } = new URL(req.url)
+  const showArchived = searchParams.get('archived') === '1'
+
   let query = supabase
     .from('projects')
     .select('*, tasks(count), project_members(user_email, role)')
@@ -28,6 +31,13 @@ export async function GET(req: NextRequest) {
     query = query.or(`user_email.eq.${email},id.in.(${memberIds.join(',')})`)
   } else {
     query = query.eq('user_email', email)
+  }
+
+  // アーカイブフィルター
+  if (showArchived) {
+    query = query.eq('archived', true)
+  } else {
+    query = query.or('archived.is.null,archived.eq.false')
   }
 
   const { data, error } = await query
