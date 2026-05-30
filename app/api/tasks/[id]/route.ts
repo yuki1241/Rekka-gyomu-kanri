@@ -3,22 +3,61 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createServerSupabase } from '@/lib/supabase'
 
+// タスクの操作権限をチェック
+async function checkTaskAccess(taskId: string, email: string) {
+  const supabase = createServerSupabase()
+
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('user_email, assigned_to_email, project_id')
+    .eq('id', taskId)
+    .single()
+
+  if (!task) return { ok: false, isTaskOwner: false }
+
+  // タスク作成者 or 担当者は常に操作可能
+  const isTaskOwner = task.user_email === email
+  const isAssignee = task.assigned_to_email === email
+  if (isTaskOwner || isAssignee) return { ok: true, isTaskOwner }
+
+  // プロジェクトに紐づくタスクはプロジェクトメンバーも操作可能
+  if (task.project_id) {
+    // プロジェクト作成者チェック
+    const { data: project } = await supabase
+      .from('projects')
+      .select('user_email')
+      .eq('id', task.project_id)
+      .single()
+    if (project?.user_email === email) return { ok: true, isTaskOwner: false }
+
+    // プロジェクトメンバーチェック
+    const { data: member } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', task.project_id)
+      .eq('user_email', email)
+      .single()
+    if (member) return { ok: true, isTaskOwner: false }
+  }
+
+  return { ok: false, isTaskOwner: false }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { ok } = await checkTaskAccess(params.id, session.user.email)
+  if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const body = await req.json()
   const supabase = createServerSupabase()
-  const email = session.user.email
-
-  // 作成者 or 担当者 どちらでも更新可能
   const { data, error } = await supabase
     .from('tasks')
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq('id', params.id)
-    .or(`user_email.eq.${email},assigned_to_email.eq.${email}`)
     .select()
     .single()
 
@@ -32,13 +71,14 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { ok } = await checkTaskAccess(params.id, session.user.email)
+  if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const supabase = createServerSupabase()
-  // 削除は作成者のみ可能
   const { error } = await supabase
     .from('tasks')
     .delete()
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return new NextResponse(null, { status: 204 })
