@@ -33,13 +33,14 @@ interface ProspectClient {
   contracted_at: string | null
   memo: string
   term: '短期' | '中期' | '長期' | null
+  amount: number | null
   lost_reason: string | null
   lost_reason_detail: string | null
   created_at: string
   user_email?: string
 }
 
-const LOST_REASONS = ['採用が決まった', '音信不通', '他社を利用', 'サービスが不要になった', 'その他'] as const
+const LOST_REASONS = ['採用が決まった', '音信不通', '自然消滅', '他社を利用', 'サービスが不要になった', 'その他'] as const
 
 const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
 
@@ -331,6 +332,7 @@ function ProspectForm({ initial, onSave, onCancel }: {
     contracted_at: initial?.contracted_at ?? '',
     memo: initial?.memo ?? '',
     term: initial?.term ?? null as ProspectClient['term'],
+    amount: initial?.amount ?? null as number | null,
     lost_reason: initial?.lost_reason ?? null as string | null,
     lost_reason_detail: initial?.lost_reason_detail ?? '',
   })
@@ -351,10 +353,17 @@ function ProspectForm({ initial, onSave, onCancel }: {
             placeholder="山田 太郎" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
         </div>
       </div>
-      <div className="mb-3">
-        <label className="text-[10px] font-semibold text-gray-500 mb-1 block">商談内容</label>
-        <input value={form.service_content} onChange={(e) => set('service_content', e.target.value)}
-          placeholder="DXコンサル、kintone導入 など" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="col-span-2">
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">商談内容</label>
+          <input value={form.service_content} onChange={(e) => set('service_content', e.target.value)}
+            placeholder="DXコンサル、kintone導入 など" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold text-gray-500 mb-1 block">金額（円）</label>
+          <input type="number" value={form.amount ?? ''} onChange={(e) => set('amount', e.target.value)}
+            placeholder="500000" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-3">
         <div>
@@ -416,6 +425,7 @@ function ProspectForm({ initial, onSave, onCancel }: {
           ...form,
           contracted_at: form.contracted_at || null,
           term: form.term || null,
+          amount: form.amount === null || form.amount === ('' as unknown) ? null : Number(form.amount),
           lost_reason: form.status === '失注' ? (form.lost_reason || null) : null,
           lost_reason_detail: form.status === '失注' && form.lost_reason === 'その他' ? form.lost_reason_detail : null,
         })}
@@ -1223,6 +1233,7 @@ export default function ProspectsPage() {
                               {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
                               <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-bold">失注</span>
                               {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
+                              {p.amount != null && <span className="text-[10px] text-gray-400">¥{p.amount.toLocaleString()}</span>}
                               {p.lost_reason && (
                                 <span className="text-[10px] bg-red-50 text-red-400 px-1.5 py-0.5 rounded">
                                   {p.lost_reason === 'その他' && p.lost_reason_detail ? p.lost_reason_detail : p.lost_reason}

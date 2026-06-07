@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       contracted_at: body.contracted_at ?? null,
       memo: body.memo ?? '',
       term: body.term ?? null,
+      amount: body.amount ?? null,
       lost_reason: body.lost_reason ?? null,
       lost_reason_detail: body.lost_reason_detail ?? null,
     })
