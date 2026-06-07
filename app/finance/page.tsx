@@ -33,9 +33,13 @@ interface ProspectClient {
   contracted_at: string | null
   memo: string
   term: '短期' | '中期' | '長期' | null
+  lost_reason: string | null
+  lost_reason_detail: string | null
   created_at: string
   user_email?: string
 }
+
+const LOST_REASONS = ['採用が決まった', '音信不通', '他社を利用', 'サービスが不要になった', 'その他'] as const
 
 const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
 
@@ -327,6 +331,8 @@ function ProspectForm({ initial, onSave, onCancel }: {
     contracted_at: initial?.contracted_at ?? '',
     memo: initial?.memo ?? '',
     term: initial?.term ?? null as ProspectClient['term'],
+    lost_reason: initial?.lost_reason ?? null as string | null,
+    lost_reason_detail: initial?.lost_reason_detail ?? '',
   })
 
   const set = (key: string, value: string) => setForm((p) => ({ ...p, [key]: value }))
@@ -380,6 +386,25 @@ function ProspectForm({ initial, onSave, onCancel }: {
           </div>
         )}
       </div>
+      {form.status === '失注' && (
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-[10px] font-semibold text-gray-500 mb-1 block">失注理由</label>
+            <select value={form.lost_reason ?? ''} onChange={(e) => set('lost_reason', e.target.value || null as unknown as string)}
+              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300 bg-white">
+              <option value="">未選択</option>
+              {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          {form.lost_reason === 'その他' && (
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 mb-1 block">理由の詳細</label>
+              <input value={form.lost_reason_detail} onChange={(e) => set('lost_reason_detail', e.target.value)}
+                placeholder="具体的な理由を入力" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+            </div>
+          )}
+        </div>
+      )}
       <div className="mb-4">
         <label className="text-[10px] font-semibold text-gray-500 mb-1 block">メモ</label>
         <textarea value={form.memo} onChange={(e) => set('memo', e.target.value)}
@@ -387,7 +412,13 @@ function ProspectForm({ initial, onSave, onCancel }: {
       </div>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">キャンセル</button>
-        <button onClick={() => onSave({ ...form, contracted_at: form.contracted_at || null, term: form.term || null })}
+        <button onClick={() => onSave({
+          ...form,
+          contracted_at: form.contracted_at || null,
+          term: form.term || null,
+          lost_reason: form.status === '失注' ? (form.lost_reason || null) : null,
+          lost_reason_detail: form.status === '失注' && form.lost_reason === 'その他' ? form.lost_reason_detail : null,
+        })}
           className="px-4 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium">保存</button>
       </div>
     </div>
@@ -1192,6 +1223,11 @@ export default function ProspectsPage() {
                               {p.contact_name && <span className="text-xs text-gray-400">{p.contact_name}</span>}
                               <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-bold">失注</span>
                               {p.contracted_at && <span className="text-[10px] text-gray-400">{p.contracted_at}</span>}
+                              {p.lost_reason && (
+                                <span className="text-[10px] bg-red-50 text-red-400 px-1.5 py-0.5 rounded">
+                                  {p.lost_reason === 'その他' && p.lost_reason_detail ? p.lost_reason_detail : p.lost_reason}
+                                </span>
+                              )}
                             </div>
                             {p.service_content && <p className="text-xs text-gray-400 truncate">{p.service_content}</p>}
                           </div>
