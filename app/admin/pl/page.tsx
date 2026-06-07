@@ -17,7 +17,7 @@ interface ProspectClient {
   user_email?: string
 }
 
-const LOST_REASONS = ['採用が決まった', '音信不通', '自然消滅', '他社を利用', 'サービスが不要になった', 'その他'] as const
+const LOST_REASONS = ['採用が決まった', '音信不通', '自然消滅', '他社を利用', 'サービスが不要になった', '見積金額が高かった', 'その他'] as const
 
 const REASON_COLORS: Record<string, string> = {
   '採用が決まった': 'bg-blue-400',
@@ -25,6 +25,7 @@ const REASON_COLORS: Record<string, string> = {
   '自然消滅': 'bg-teal-400',
   '他社を利用': 'bg-orange-400',
   'サービスが不要になった': 'bg-purple-400',
+  '見積金額が高かった': 'bg-amber-400',
   'その他': 'bg-rose-400',
   '未選択': 'bg-gray-200',
 }

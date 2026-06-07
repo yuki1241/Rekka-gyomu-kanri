@@ -40,7 +40,7 @@ interface ProspectClient {
   user_email?: string
 }
 
-const LOST_REASONS = ['採用が決まった', '音信不通', '自然消滅', '他社を利用', 'サービスが不要になった', 'その他'] as const
+const LOST_REASONS = ['採用が決まった', '音信不通', '自然消滅', '他社を利用', 'サービスが不要になった', '見積金額が高かった', 'その他'] as const
 
 const SPREADSHEET_ID = '1a5UjlKCA_FwqHLagEpeCPdh1C0hytLHWyjTkrbDeoqQ'
 
