@@ -76,10 +76,25 @@ export default function TasksPage() {
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/tasks?mode=${activeTab}`)
-    if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data)) setTasks(data)
+    if (activeTab === 'mine') {
+      // 自分のタスク + 自分に依頼されたタスクをまとめて表示
+      const [mineRes, assignedRes] = await Promise.all([
+        fetch('/api/tasks?mode=mine'),
+        fetch('/api/tasks?mode=assigned_to_me'),
+      ])
+      const mineData = mineRes.ok ? await mineRes.json() : []
+      const assignedData = assignedRes.ok ? await assignedRes.json() : []
+      const merged = [
+        ...(Array.isArray(mineData) ? mineData : []),
+        ...(Array.isArray(assignedData) ? assignedData : []),
+      ].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      setTasks(merged)
+    } else {
+      const res = await fetch(`/api/tasks?mode=${activeTab}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) setTasks(data)
+      }
     }
     setLoading(false)
   }, [activeTab])
@@ -168,7 +183,6 @@ export default function TasksPage() {
   const tabs: { mode: TabMode; label: string; icon: React.ReactNode; color: string }[] = [
     { mode: 'mine', label: '自分のタスク', icon: null, color: 'bg-blue-600' },
     { mode: 'assigned_by_me', label: '依頼中', icon: <SendHorizonal size={13} />, color: 'bg-orange-500' },
-    { mode: 'assigned_to_me', label: '依頼された', icon: <UserCheck size={13} />, color: 'bg-purple-600' },
     { mode: 'all', label: '全員のタスク', icon: <Globe size={13} />, color: 'bg-teal-600' },
     { mode: 'archive', label: 'アーカイブ', icon: <Archive size={13} />, color: 'bg-gray-500' },
   ]
@@ -210,7 +224,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* タブ切り替え（自分・依頼中・依頼された） */}
+      {/* タブ切り替え（自分・依頼中・全員・アーカイブ） */}
       <div className="flex items-center gap-2 mb-5">
         {tabs.map((tab) => (
           <button
@@ -233,11 +247,6 @@ export default function TasksPage() {
       {activeTab === 'assigned_by_me' && (
         <div className="mb-4 px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-xs text-orange-700">
           あなたが他のメンバーに依頼しているタスクです。担当者のステータス更新がここに反映されます。
-        </div>
-      )}
-      {activeTab === 'assigned_to_me' && (
-        <div className="mb-4 px-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-xs text-purple-700">
-          他のメンバーからあなたに依頼されたタスクです。ステータスを更新して進捗を報告できます。
         </div>
       )}
       {activeTab === 'all' && (
@@ -307,11 +316,8 @@ export default function TasksPage() {
               {activeTab === 'assigned_by_me' && (
                 <th className="px-4 py-3 text-left text-xs font-semibold text-orange-500 w-28">依頼先</th>
               )}
-              {activeTab === 'assigned_to_me' && (
-                <th className="px-4 py-3 text-left text-xs font-semibold text-purple-500 w-28">依頼者</th>
-              )}
               {activeTab === 'mine' && (
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">担当者</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-28">依頼者</th>
               )}
               {activeTab === 'all' && (
                 <th className="px-4 py-3 text-left text-xs font-semibold text-teal-600 w-28">メンバー</th>
@@ -334,7 +340,6 @@ export default function TasksPage() {
               <tr>
                 <td colSpan={7} className="px-5 py-16 text-center text-gray-400 text-sm">
                   {activeTab === 'assigned_by_me' ? '依頼中のタスクはありません' :
-                   activeTab === 'assigned_to_me' ? '依頼されたタスクはありません' :
                    activeTab === 'all' ? 'タスクがありません' :
                    activeTab === 'archive' ? 'アーカイブ済みのタスクはありません' :
                    'タスクはありません'}
@@ -349,9 +354,10 @@ export default function TasksPage() {
                 const isWarning = !isOverdue && task.due_date === tomorrowStr && task.status !== 'done'
                 const isOwner = task.user_email === session?.user?.email
                 const isAssignee = task.assigned_to_email === session?.user?.email
-                // mine/archive タブはAPIが自分のタスクのみ返すため常に操作可能
-                const canEdit = activeTab === 'mine' || activeTab === 'archive' || activeTab === 'assigned_to_me' || isOwner || isAssignee
-                const canDelete = activeTab === 'mine' || activeTab === 'archive' || isOwner
+                // mine/archive タブはAPIが自分が関わるタスクのみ返すため常に編集可能
+                const canEdit = activeTab === 'mine' || activeTab === 'archive' || isOwner || isAssignee
+                // 削除・アーカイブは作成者のみ（依頼されたタスクは不可）
+                const canDelete = activeTab === 'archive' || isOwner
                 const assigneeName = getName(task.assigned_to_email)
                 const requesterName = getName(task.assigned_by_email)
                 // 全員タブ: 担当者（assigned_to_email優先、なければuser_email）
@@ -417,13 +423,13 @@ export default function TasksPage() {
                           {assigneeName}
                         </span>
                       )}
-                      {activeTab === 'assigned_to_me' && requesterName && (
+                      {activeTab === 'mine' && !isOwner && requesterName && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
                           <UserCheck size={10} />
                           {requesterName}
                         </span>
                       )}
-                      {activeTab === 'mine' && assigneeName && assigneeName !== '自分' && (
+                      {activeTab === 'mine' && isOwner && assigneeName && assigneeName !== '自分' && (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
                           {assigneeName}
                         </span>
