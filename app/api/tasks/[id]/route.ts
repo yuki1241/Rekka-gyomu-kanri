@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createServerSupabase } from '@/lib/supabase'
+import { sendTaskAssignedEmail } from '@/lib/email'
 
 // タスクの操作権限をチェック
 async function checkTaskAccess(taskId: string, email: string) {
@@ -13,12 +14,12 @@ async function checkTaskAccess(taskId: string, email: string) {
     .eq('id', taskId)
     .single()
 
-  if (!task) return { ok: false, isTaskOwner: false }
+  if (!task) return { ok: false, isTaskOwner: false, task: null }
 
   // タスク作成者 or 担当者は常に操作可能
   const isTaskOwner = task.user_email === email
   const isAssignee = task.assigned_to_email === email
-  if (isTaskOwner || isAssignee) return { ok: true, isTaskOwner }
+  if (isTaskOwner || isAssignee) return { ok: true, isTaskOwner, task }
 
   // プロジェクトに紐づくタスクはプロジェクトメンバーも操作可能
   if (task.project_id) {
@@ -28,7 +29,7 @@ async function checkTaskAccess(taskId: string, email: string) {
       .select('user_email')
       .eq('id', task.project_id)
       .single()
-    if (project?.user_email === email) return { ok: true, isTaskOwner: false }
+    if (project?.user_email === email) return { ok: true, isTaskOwner: false, task }
 
     // プロジェクトメンバーチェック
     const { data: member } = await supabase
@@ -37,10 +38,10 @@ async function checkTaskAccess(taskId: string, email: string) {
       .eq('project_id', task.project_id)
       .eq('user_email', email)
       .single()
-    if (member) return { ok: true, isTaskOwner: false }
+    if (member) return { ok: true, isTaskOwner: false, task }
   }
 
-  return { ok: false, isTaskOwner: false }
+  return { ok: false, isTaskOwner: false, task }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -49,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { ok } = await checkTaskAccess(params.id, session.user.email)
+  const { ok, task: before } = await checkTaskAccess(params.id, session.user.email)
   if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
@@ -62,6 +63,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // 担当者が新しく設定・変更された場合のみ通知
+  if (
+    data.assigned_to_email &&
+    data.assigned_to_email !== session.user.email &&
+    data.assigned_to_email !== before?.assigned_to_email
+  ) {
+    await sendTaskAssignedEmail({
+      to: data.assigned_to_email,
+      taskTitle: data.title,
+      taskDescription: data.description,
+      dueDate: data.due_date,
+      priority: data.priority,
+      fromName: session.user.name ?? session.user.email,
+    })
+  }
+
   return NextResponse.json(data)
 }
 

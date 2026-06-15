@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createServerSupabase } from '@/lib/supabase'
+import { sendTaskAssignedEmail } from '@/lib/email'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -81,5 +82,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (data.assigned_to_email && data.assigned_to_email !== session.user.email) {
+    await sendTaskAssignedEmail({
+      to: data.assigned_to_email,
+      taskTitle: data.title,
+      taskDescription: data.description,
+      dueDate: data.due_date,
+      priority: data.priority,
+      fromName: session.user.name ?? session.user.email,
+    })
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
