@@ -5,6 +5,17 @@ import { useSession } from 'next-auth/react'
 import { Plus, Pencil, Trash2, X, Lightbulb, CheckSquare, Users } from 'lucide-react'
 import clsx from 'clsx'
 
+type SuggestionStatus = '未対応' | '対応中' | '対応済み' | '保留中'
+
+const STATUS_OPTIONS: SuggestionStatus[] = ['未対応', '対応中', '対応済み', '保留中']
+
+const STATUS_COLOR: Record<SuggestionStatus, string> = {
+  '未対応': 'text-red-500',
+  '対応中': 'text-green-600',
+  '対応済み': 'text-blue-600',
+  '保留中': 'text-gray-800',
+}
+
 interface Suggestion {
   id: string
   user_email: string
@@ -12,6 +23,7 @@ interface Suggestion {
   body: string
   submitted_at: string
   no_opinion: boolean
+  status: SuggestionStatus | null
   created_at: string
 }
 
@@ -30,7 +42,7 @@ function getWeekRange(): { monday: string; sunday: string } {
 interface SuggestionModalProps {
   suggestion?: Suggestion | null
   onClose: () => void
-  onSave: (data: { subject: string; body: string; submitted_at: string }) => void
+  onSave: (data: { subject: string; body: string; submitted_at: string; status: SuggestionStatus }) => void
 }
 
 function SuggestionModal({ suggestion, onClose, onSave }: SuggestionModalProps) {
@@ -38,6 +50,7 @@ function SuggestionModal({ suggestion, onClose, onSave }: SuggestionModalProps) 
   const [subject, setSubject] = useState(suggestion?.subject ?? '')
   const [body, setBody] = useState(suggestion?.body ?? '')
   const [submittedAt, setSubmittedAt] = useState(suggestion?.submitted_at ?? today)
+  const [status, setStatus] = useState<SuggestionStatus>(suggestion?.status ?? '未対応')
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -87,6 +100,21 @@ function SuggestionModal({ suggestion, onClose, onSave }: SuggestionModalProps) 
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400/30"
             />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">ステータス</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as SuggestionStatus)}
+              className={clsx(
+                'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400/30 font-medium',
+                STATUS_COLOR[status]
+              )}
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s} className={STATUS_COLOR[s]}>{s}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="px-6 pb-5 flex justify-end gap-3">
           <button
@@ -98,7 +126,7 @@ function SuggestionModal({ suggestion, onClose, onSave }: SuggestionModalProps) 
           <button
             onClick={() => {
               if (!subject.trim()) return
-              onSave({ subject: subject.trim(), body: body.trim(), submitted_at: submittedAt })
+              onSave({ subject: subject.trim(), body: body.trim(), submitted_at: submittedAt, status })
             }}
             className="px-5 py-2 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
           >
@@ -311,6 +339,11 @@ export default function SuggestionsPage() {
                     </span>
                     {s.no_opinion && (
                       <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">意見なし</span>
+                    )}
+                    {!s.no_opinion && s.status && (
+                      <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100', STATUS_COLOR[s.status])}>
+                        {s.status}
+                      </span>
                     )}
                     {adminViewAll && (
                       <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">

@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
       body: body.body ?? '',
       submitted_at: body.submitted_at ?? new Date().toISOString().split('T')[0],
       no_opinion: body.no_opinion ?? false,
+      status: body.status ?? '未対応',
     })
     .select()
     .single()
