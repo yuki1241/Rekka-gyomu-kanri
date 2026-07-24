@@ -149,6 +149,7 @@ export default function SuggestionsPage() {
   const [adminViewAll, setAdminViewAll] = useState(false)
   const [submittingNoOpinion, setSubmittingNoOpinion] = useState(false)
   const [memberNames, setMemberNames] = useState<Record<string, string>>({})
+  const [statusFilter, setStatusFilter] = useState<'all' | SuggestionStatus>('all')
 
   const today = new Date().toISOString().split('T')[0]
   const { monday, sunday } = getWeekRange()
@@ -311,16 +312,36 @@ export default function SuggestionsPage() {
         </div>
       )}
 
+      {/* ステータスフィルター */}
+      <div className="flex items-center gap-1 mb-4 flex-wrap">
+        {(['all', ...STATUS_OPTIONS] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={clsx(
+              'px-3 py-1 text-xs rounded-lg font-medium transition-colors',
+              statusFilter === s
+                ? s === 'all'
+                  ? 'bg-gray-700 text-white'
+                  : clsx('bg-gray-100 border border-gray-200', STATUS_COLOR[s])
+                : 'text-gray-400 hover:bg-gray-100'
+            )}
+          >
+            {s === 'all' ? 'すべて' : s}
+          </button>
+        ))}
+      </div>
+
       {/* 一覧 */}
       <div className="space-y-3">
         {loading ? (
           <div className="text-center py-16 text-gray-400 text-sm">読み込み中...</div>
-        ) : suggestions.length === 0 ? (
+        ) : suggestions.filter((s) => statusFilter === 'all' || (!s.no_opinion && s.status === statusFilter)).length === 0 ? (
           <div className="text-center py-16 text-gray-300 text-sm border border-dashed border-gray-200 rounded-xl">
             意見はまだありません
           </div>
         ) : (
-          suggestions.map((s) => (
+          suggestions.filter((s) => statusFilter === 'all' || (!s.no_opinion && s.status === statusFilter)).map((s) => (
             <div
               key={s.id}
               className={clsx(
