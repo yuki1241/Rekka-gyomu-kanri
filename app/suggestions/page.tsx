@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Plus, Pencil, Trash2, X, Lightbulb, CheckSquare, Users } from 'lucide-react'
 import clsx from 'clsx'
@@ -25,6 +25,43 @@ interface Suggestion {
   no_opinion: boolean
   status: SuggestionStatus | null
   created_at: string
+}
+
+function StatusBadge({ status, onChange }: { status: SuggestionStatus; onChange: (v: SuggestionStatus) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors', STATUS_COLOR[status])}
+      >
+        {status}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[80px]">
+          {STATUS_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false) }}
+              className={clsx('w-full text-left text-[11px] font-semibold px-3 py-1.5 hover:bg-gray-50 transition-colors', STATUS_COLOR[opt])}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getWeekRange(): { monday: string; sunday: string } {
@@ -371,19 +408,10 @@ export default function SuggestionsPage() {
                       <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">意見なし</span>
                     )}
                     {!s.no_opinion && (
-                      <select
-                        value={s.status ?? '未対応'}
-                        onChange={(e) => handleStatusChange(s.id, e.target.value as SuggestionStatus)}
-                        onClick={(e) => e.stopPropagation()}
-                        className={clsx(
-                          'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-yellow-300',
-                          STATUS_COLOR[s.status ?? '未対応']
-                        )}
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
+                      <StatusBadge
+                        status={s.status ?? '未対応'}
+                        onChange={(v) => handleStatusChange(s.id, v)}
+                      />
                     )}
                     {adminViewAll && (
                       <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">
