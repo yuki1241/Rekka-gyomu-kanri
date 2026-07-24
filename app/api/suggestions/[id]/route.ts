@@ -13,7 +13,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .from('suggestions')
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
     .select()
     .single()
 

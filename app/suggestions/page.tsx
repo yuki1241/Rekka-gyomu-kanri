@@ -323,24 +323,24 @@ export default function SuggestionsPage() {
                     <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.body}</p>
                   )}
                 </div>
-                {(!adminViewAll || s.user_email === session?.user?.email) && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {!s.no_opinion && (
-                      <button
-                        onClick={() => { setEditingSuggestion(s); setShowModal(true) }}
-                        className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    )}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {!s.no_opinion && (
+                    <button
+                      onClick={() => { setEditingSuggestion(s); setShowModal(true) }}
+                      className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  {s.user_email === session?.user?.email && (
                     <button
                       onClick={() => handleDelete(s.id)}
                       className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                     >
                       <Trash2 size={13} />
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ))
