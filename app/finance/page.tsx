@@ -460,8 +460,8 @@ function RateCell({ rate }: { rate: number | null }) {
 }
 
 function NumberCell({
-  value, onChange
-}: { value: number; onChange: (v: number) => void }) {
+  value, onChange, readOnly = false
+}: { value: number; onChange: (v: number) => void; readOnly?: boolean }) {
   const [editing, setEditing] = useState(false)
   const [local, setLocal] = useState(String(value))
   const inputRef = useRef<HTMLInputElement>(null)
@@ -469,7 +469,7 @@ function NumberCell({
   useEffect(() => { setLocal(String(value)) }, [value])
   useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
 
-  if (editing) {
+  if (editing && !readOnly) {
     return (
       <input
         ref={inputRef}
@@ -484,8 +484,11 @@ function NumberCell({
   }
   return (
     <span
-      onClick={() => setEditing(true)}
-      className="text-xs text-gray-800 cursor-pointer hover:bg-orange-50 px-1.5 py-0.5 rounded min-w-[2rem] text-center block"
+      onClick={readOnly ? undefined : () => setEditing(true)}
+      className={clsx(
+        'text-xs text-gray-800 px-1.5 py-0.5 rounded min-w-[2rem] text-center block',
+        readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-orange-50'
+      )}
     >
       {value || 0}
     </span>
@@ -493,8 +496,8 @@ function NumberCell({
 }
 
 function ReflectionCell({
-  value, onChange
-}: { value: string; onChange: (v: string) => void }) {
+  value, onChange, readOnly = false
+}: { value: string; onChange: (v: string) => void; readOnly?: boolean }) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState(value)
   useEffect(() => { setLocal(value) }, [value])
@@ -502,10 +505,11 @@ function ReflectionCell({
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(true)}
+        onClick={readOnly ? undefined : () => setOpen(true)}
+        disabled={readOnly}
         className={clsx(
           'p-1 rounded transition-colors',
-          value ? 'text-orange-500 hover:bg-orange-50' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-50'
+          readOnly ? 'text-gray-200 cursor-default' : value ? 'text-orange-500 hover:bg-orange-50' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-50'
         )}
       >
         <MessageSquare size={12} />
@@ -690,7 +694,8 @@ export default function ProspectsPage() {
   }
 
   const buildGoalsUrl = (ym: string, filter: string) => {
-    if (filter !== 'self' && filter !== 'all') return `/api/goals?year_month=${ym}&target_email=${encodeURIComponent(filter)}`
+    if (filter === 'all') return `/api/goals?year_month=${ym}&all=1`
+    if (filter !== 'self') return `/api/goals?year_month=${ym}&target_email=${encodeURIComponent(filter)}`
     return `/api/goals?year_month=${ym}`
   }
 
@@ -991,12 +996,14 @@ export default function ProspectsPage() {
                           <NumberCell
                             value={entry.target_value}
                             onChange={(v) => updateEntry(t.id, w.num, { target_value: v })}
+                            readOnly={memberFilter === 'all'}
                           />
                         </td>
                         <td key={`${w.num}-actual`} className="px-1 py-2 text-center">
                           <NumberCell
                             value={entry.actual_value}
                             onChange={(v) => updateEntry(t.id, w.num, { actual_value: v })}
+                            readOnly={memberFilter === 'all'}
                           />
                         </td>
                         <td key={`${w.num}-rate`} className="px-1 py-2 text-center">
@@ -1006,6 +1013,7 @@ export default function ProspectsPage() {
                           <ReflectionCell
                             value={entry.reflection}
                             onChange={(v) => updateEntry(t.id, w.num, { reflection: v })}
+                            readOnly={memberFilter === 'all'}
                           />
                         </td>
                       </>
