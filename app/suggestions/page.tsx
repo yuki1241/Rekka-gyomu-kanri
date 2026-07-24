@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Pencil, Trash2, X, Lightbulb, CheckSquare, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Lightbulb, CheckSquare, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 
 type SuggestionStatus = '未対応' | '対応中' | '対応済み' | '保留中'
@@ -187,6 +187,15 @@ export default function SuggestionsPage() {
   const [submittingNoOpinion, setSubmittingNoOpinion] = useState(false)
   const [memberNames, setMemberNames] = useState<Record<string, string>>({})
   const [statusFilter, setStatusFilter] = useState<'all' | SuggestionStatus>('all')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const today = new Date().toISOString().split('T')[0]
   const { monday, sunday } = getWeekRange()
@@ -396,6 +405,20 @@ export default function SuggestionsPage() {
               )}
             >
               <div className="flex items-start gap-4">
+                {/* アコーディオントグル */}
+                {!s.no_opinion && s.body ? (
+                  <button
+                    onClick={() => toggleExpand(s.id)}
+                    className="mt-0.5 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {expandedIds.has(s.id)
+                      ? <ChevronDown size={15} />
+                      : <ChevronRight size={15} />
+                    }
+                  </button>
+                ) : (
+                  <span className="w-[15px] flex-shrink-0" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={clsx(
@@ -420,8 +443,8 @@ export default function SuggestionsPage() {
                     )}
                     <span className="text-xs text-gray-400 ml-auto">{s.submitted_at}</span>
                   </div>
-                  {!s.no_opinion && s.body && (
-                    <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.body}</p>
+                  {!s.no_opinion && s.body && expandedIds.has(s.id) && (
+                    <p className="text-xs text-gray-500 mt-2 whitespace-pre-wrap">{s.body}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
