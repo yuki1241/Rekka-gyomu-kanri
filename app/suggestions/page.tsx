@@ -404,12 +404,12 @@ export default function SuggestionsPage() {
                 s.no_opinion ? 'border-gray-100 opacity-60' : 'border-gray-100 hover:border-yellow-200'
               )}
             >
-              <div className="flex items-start gap-4">
+              <div className={clsx('flex gap-4', expandedIds.has(s.id) ? 'items-start' : 'items-center')}>
                 {/* アコーディオントグル */}
                 {!s.no_opinion && s.body ? (
                   <button
                     onClick={() => toggleExpand(s.id)}
-                    className="mt-0.5 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                    className={clsx('flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors', expandedIds.has(s.id) && 'mt-0.5')}
                   >
                     {expandedIds.has(s.id)
                       ? <ChevronDown size={15} />
