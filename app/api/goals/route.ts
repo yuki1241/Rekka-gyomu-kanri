@@ -15,19 +15,30 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const yearMonth = searchParams.get('year_month') ?? ''
+  const targetEmail = searchParams.get('target_email')
+  const isAdmin = (session.user as { role?: string }).role === 'admin'
+
+  // 管理者が特定メンバーを指定した場合はそのメールアドレスで取得、それ以外は自分
+  const userEmail = (isAdmin && targetEmail) ? targetEmail : session.user.email
+
   const supabase = createServerSupabase()
 
   // テンプレート取得（なければデフォルト作成）
   let { data: templates } = await supabase
     .from('goal_templates')
     .select('*')
-    .eq('user_email', session.user.email)
+    .eq('user_email', userEmail)
     .order('type').order('order_num')
 
   if (!templates || templates.length === 0) {
-    const inserts = DEFAULT_TEMPLATES.map((t) => ({ ...t, user_email: session.user.email }))
-    const { data: created } = await supabase.from('goal_templates').insert(inserts).select()
-    templates = created ?? []
+    // 他メンバー表示時はデフォルト作成しない（自分のときのみ作成）
+    if (!isAdmin || !targetEmail) {
+      const inserts = DEFAULT_TEMPLATES.map((t) => ({ ...t, user_email: userEmail }))
+      const { data: created } = await supabase.from('goal_templates').insert(inserts).select()
+      templates = created ?? []
+    } else {
+      templates = []
+    }
   }
 
   // エントリ取得
@@ -36,12 +47,12 @@ export async function GET(req: NextRequest) {
     const { data } = await supabase
       .from('goal_entries')
       .select('*')
-      .eq('user_email', session.user.email)
+      .eq('user_email', userEmail)
       .eq('year_month', yearMonth)
     entries = data ?? []
 
-    // 当月データが1件もない場合 → 前月の目標値を自動コピー
-    if (entries.length === 0) {
+    // 当月データが1件もない場合 → 前月の目標値を自動コピー（自分のデータのみ）
+    if (entries.length === 0 && (!isAdmin || !targetEmail)) {
       const [y, m] = yearMonth.split('-').map(Number)
       const prevDate = new Date(y, m - 2, 1)
       const prevYearMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
@@ -49,7 +60,7 @@ export async function GET(req: NextRequest) {
       const { data: prevEntries } = await supabase
         .from('goal_entries')
         .select('*')
-        .eq('user_email', session.user.email)
+        .eq('user_email', userEmail)
         .eq('year_month', prevYearMonth)
 
       if (prevEntries && prevEntries.length > 0) {
@@ -58,7 +69,7 @@ export async function GET(req: NextRequest) {
           week_num: number
           target_value: number
         }) => ({
-          user_email: session.user.email,
+          user_email: userEmail,
           template_id: e.template_id,
           year_month: yearMonth,
           week_num: e.week_num,

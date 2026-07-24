@@ -689,11 +689,17 @@ export default function ProspectsPage() {
     return '/api/prospects'
   }
 
+  const buildGoalsUrl = (ym: string, filter: string) => {
+    if (filter !== 'self' && filter !== 'all') return `/api/goals?year_month=${ym}&target_email=${encodeURIComponent(filter)}`
+    return `/api/goals?year_month=${ym}`
+  }
+
   const fetchData = useCallback(async (ym: string, filter = 'self') => {
     setLoading(true)
     const prospectsUrl = buildProspectsUrl(filter)
+    const goalsUrl = buildGoalsUrl(ym, filter)
     const [goalsRes, prospectsRes] = await Promise.all([
-      fetch(`/api/goals?year_month=${ym}`),
+      fetch(goalsUrl),
       fetch(prospectsUrl),
     ])
     const data = await goalsRes.json()
