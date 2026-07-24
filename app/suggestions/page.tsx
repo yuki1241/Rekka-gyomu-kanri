@@ -232,6 +232,15 @@ export default function SuggestionsPage() {
     fetchSuggestions()
   }
 
+  const handleStatusChange = async (id: string, status: SuggestionStatus) => {
+    await fetch(`/api/suggestions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    fetchSuggestions()
+  }
+
   return (
     <div>
       {/* ヘッダー */}
@@ -361,10 +370,20 @@ export default function SuggestionsPage() {
                     {s.no_opinion && (
                       <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">意見なし</span>
                     )}
-                    {!s.no_opinion && s.status && (
-                      <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100', STATUS_COLOR[s.status])}>
-                        {s.status}
-                      </span>
+                    {!s.no_opinion && (
+                      <select
+                        value={s.status ?? '未対応'}
+                        onChange={(e) => handleStatusChange(s.id, e.target.value as SuggestionStatus)}
+                        onClick={(e) => e.stopPropagation()}
+                        className={clsx(
+                          'text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-50 border border-gray-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-yellow-300',
+                          STATUS_COLOR[s.status ?? '未対応']
+                        )}
+                      >
+                        {STATUS_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
                     )}
                     {adminViewAll && (
                       <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">
