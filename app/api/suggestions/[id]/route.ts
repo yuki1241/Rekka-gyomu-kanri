@@ -29,7 +29,6 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     .from('suggestions')
     .delete()
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return new NextResponse(null, { status: 204 })

@@ -456,7 +456,7 @@ export default function SuggestionsPage() {
                       <Pencil size={13} />
                     </button>
                   )}
-                  {s.user_email === session?.user?.email && (
+                  {!s.no_opinion && (
                     <button
                       onClick={() => handleDelete(s.id)}
                       className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
