@@ -16,7 +16,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
     .select()
     .single()
 
@@ -33,7 +32,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     .from('prospect_clients')
     .delete()
     .eq('id', params.id)
-    .eq('user_email', session.user.email)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

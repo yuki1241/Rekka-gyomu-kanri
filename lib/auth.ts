@@ -77,6 +77,11 @@ export const authOptions: NextAuthOptions = {
       // アクセストークンがまだ有効な場合はそのまま返す（60秒の余裕を持たせる）
       const expiresAt = token.expiresAt as number | undefined
       if (expiresAt && Date.now() / 1000 < expiresAt - 60) {
+        if (!token.role && token.email) {
+          const supabase = createServerSupabase()
+          const { data } = await supabase.from('app_users').select('role').eq('email', token.email as string).single()
+          token.role = data?.role ?? 'viewer'
+        }
         return token
       }
 

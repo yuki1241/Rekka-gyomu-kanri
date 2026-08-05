@@ -665,6 +665,16 @@ export default function ProspectsPage() {
   const [editingProspect, setEditingProspect] = useState<ProspectClient | null>(null)
   const [showLost, setShowLost] = useState(false)
   const [termFilter, setTermFilter] = useState<string>('all')
+  const [expandedProspectIds, setExpandedProspectIds] = useState<Set<string>>(new Set())
+
+  const toggleProspectExpand = (id: string) => {
+    setExpandedProspectIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // 管理者用メンバーフィルター（'self' = 自分, 'all' = 全員, メールアドレス = 特定メンバー）
   const [memberFilter, setMemberFilter] = useState<string>('self')
@@ -882,7 +892,7 @@ export default function ProspectsPage() {
             <p className="text-gray-500 mt-0.5 text-sm">KGI・KPI・KDIの目標管理</p>
           </div>
           {/* 管理者用メンバーフィルター */}
-          {isAdmin && members.length > 0 && (
+          {isAdmin && (
             <div className="flex items-center gap-1.5 ml-2 px-3 py-1.5 bg-purple-50 border border-purple-100 rounded-xl">
               <Users size={13} className="text-purple-500 flex-shrink-0" />
               <select
@@ -1118,6 +1128,12 @@ export default function ProspectsPage() {
                     ) : (
                       <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-orange-200 transition-colors shadow-sm">
                         <div className="flex items-start gap-4">
+                          <button
+                            onClick={() => toggleProspectExpand(p.id)}
+                            className="mt-0.5 text-gray-300 hover:text-orange-400 transition-colors flex-shrink-0"
+                          >
+                            {expandedProspectIds.has(p.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
@@ -1132,18 +1148,18 @@ export default function ProspectsPage() {
                               )}
                             </div>
                             {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
-                            {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
+                            {expandedProspectIds.has(p.id) && p.memo && (
+                              <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{p.memo}</p>
+                            )}
                           </div>
-                          {memberFilter === 'self' && (
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button onClick={() => setEditingProspect(p)}
-                                className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
-                              <button onClick={() => deleteProspect(p.id)}
-                                className="text-gray-300 hover:text-red-400 transition-colors p-1">
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => setEditingProspect(p)}
+                              className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                            <button onClick={() => deleteProspect(p.id)}
+                              className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                         <ProspectTaskSection prospectId={p.id} prospectName={p.company_name} />
                       </div>
@@ -1181,6 +1197,12 @@ export default function ProspectsPage() {
                   ) : (
                     <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 hover:border-green-300 transition-colors shadow-sm">
                       <div className="flex items-start gap-4">
+                        <button
+                          onClick={() => toggleProspectExpand(p.id)}
+                          className="mt-0.5 text-gray-300 hover:text-orange-400 transition-colors flex-shrink-0"
+                        >
+                          {expandedProspectIds.has(p.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-semibold text-gray-900 truncate">{p.company_name || '（会社名未入力）'}</span>
@@ -1191,18 +1213,18 @@ export default function ProspectsPage() {
                             {memberFilter !== 'self' && p.user_email && <span className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">{p.user_email}</span>}
                           </div>
                           {p.service_content && <p className="text-xs text-gray-500 truncate">{p.service_content}</p>}
-                          {p.memo && <p className="text-xs text-gray-400 mt-1 truncate">{p.memo}</p>}
+                          {expandedProspectIds.has(p.id) && p.memo && (
+                            <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{p.memo}</p>
+                          )}
                         </div>
-                        {memberFilter === 'self' && (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button onClick={() => setEditingProspect(p)}
-                              className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
-                            <button onClick={() => deleteProspect(p.id)}
-                              className="text-gray-300 hover:text-red-400 transition-colors p-1">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button onClick={() => setEditingProspect(p)}
+                            className="text-xs text-gray-400 hover:text-orange-500 px-2 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
+                          <button onClick={() => deleteProspect(p.id)}
+                            className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                       <ProspectTaskSection prospectId={p.id} prospectName={p.company_name} />
                     </div>
@@ -1241,6 +1263,12 @@ export default function ProspectsPage() {
                     ) : (
                       <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 opacity-60">
                         <div className="flex items-start gap-4">
+                          <button
+                            onClick={() => toggleProspectExpand(p.id)}
+                            className="mt-0.5 text-gray-300 hover:text-orange-400 transition-colors flex-shrink-0"
+                          >
+                            {expandedProspectIds.has(p.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-semibold text-gray-700 truncate">{p.company_name || '（会社名未入力）'}</span>
@@ -1255,6 +1283,9 @@ export default function ProspectsPage() {
                               )}
                             </div>
                             {p.service_content && <p className="text-xs text-gray-400 truncate">{p.service_content}</p>}
+                            {expandedProspectIds.has(p.id) && p.memo && (
+                              <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{p.memo}</p>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <button onClick={() => setEditingProspect(p)}
