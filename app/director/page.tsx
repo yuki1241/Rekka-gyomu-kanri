@@ -646,13 +646,34 @@ export default function DirectorCasesPage() {
                 {/* 次回予定 */}
                 <div>
                   <label className={labelClass}>次回予定</label>
-                  <input
-                    type="datetime-local"
-                    step={1800}
-                    value={form.next_date}
-                    onChange={e => setForm(f => ({ ...f, next_date: e.target.value }))}
-                    className={inputClass}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={form.next_date ? form.next_date.split('T')[0] : ''}
+                      onChange={e => {
+                        const d = e.target.value
+                        setForm(f => {
+                          const t = f.next_date.includes('T') ? f.next_date.split('T')[1].slice(0, 5) : '00:00'
+                          return { ...f, next_date: d ? `${d}T${t}` : '' }
+                        })
+                      }}
+                      className={clsx(inputClass, 'flex-1')}
+                    />
+                    <select
+                      value={form.next_date.includes('T') ? form.next_date.split('T')[1].slice(0, 5) : '00:00'}
+                      onChange={e => setForm(f => {
+                        const d = f.next_date ? f.next_date.split('T')[0] : ''
+                        return { ...f, next_date: d ? `${d}T${e.target.value}` : f.next_date }
+                      })}
+                      className={clsx(inputClass, 'w-28')}
+                    >
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const h = String(Math.floor(i / 2)).padStart(2, '0')
+                        const m = i % 2 === 0 ? '00' : '30'
+                        return <option key={i} value={`${h}:${m}`}>{`${h}:${m}`}</option>
+                      })}
+                    </select>
+                  </div>
                 </div>
 
                 {/* 優先度 */}
