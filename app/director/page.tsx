@@ -648,6 +648,7 @@ export default function DirectorCasesPage() {
                   <label className={labelClass}>次回予定</label>
                   <input
                     type="datetime-local"
+                    step={1800}
                     value={form.next_date}
                     onChange={e => setForm(f => ({ ...f, next_date: e.target.value }))}
                     className={inputClass}
