@@ -552,6 +552,27 @@ export default function DirectorCasesPage() {
               {renderCalendarGrid()}
             </div>
           </div>
+        ) : view === 'all' ? (
+          <div>
+            {(() => {
+              const unassigned = activeCases.filter(c => !c.assistant_email)
+              const assigned = activeCases.filter(c => !!c.assistant_email)
+              return (
+                <>
+                  <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-amber-50 border-amber-100">
+                    <span className="text-sm font-bold text-amber-700">未振り分け</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">{unassigned.length}件</span>
+                  </div>
+                  {renderTable(unassigned)}
+                  <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-green-50 border-green-100">
+                    <span className="text-sm font-bold text-green-700">振り分け済み</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-600">{assigned.length}件</span>
+                  </div>
+                  {renderTable(assigned)}
+                </>
+              )
+            })()}
+          </div>
         ) : renderTable(filteredCases, view === 'archived')}
       </div>
 
