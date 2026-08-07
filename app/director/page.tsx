@@ -30,10 +30,11 @@ interface DirectorCase {
   updated_at: string
 }
 
-type ViewType = 'all' | 'active' | 'by_director' | 'this_month' | 'by_priority' | 'archived'
+type ViewType = 'all' | 'active' | 'by_director' | 'by_sales' | 'this_month' | 'by_priority' | 'archived'
 
 const VIEWS: { key: ViewType; label: string }[] = [
   { key: 'all', label: '全案件一覧' },
+  { key: 'by_sales', label: '営業別' },
   { key: 'by_director', label: 'ディレクター別' },
   { key: 'this_month', label: '今月タスク' },
   { key: 'by_priority', label: '優先度別管理' },
@@ -188,6 +189,17 @@ export default function DirectorCasesPage() {
     return groups
   })()
 
+  const bySales = (() => {
+    if (view !== 'by_sales') return null
+    const groups: Record<string, DirectorCase[]> = {}
+    for (const c of activeCases) {
+      const key = c.sales_email || '__none__'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(c)
+    }
+    return groups
+  })()
+
   const openAdd = () => {
     setEditingCase(null)
     setForm(emptyForm())
@@ -203,7 +215,7 @@ export default function DirectorCasesPage() {
       sales_email: c.sales_email,
       assistant_email: c.assistant_email,
       current_position: c.current_position,
-      next_date: c.next_date ?? '',
+      next_date: c.next_date ? (c.next_date.includes('T') ? c.next_date.slice(0, 16) : c.next_date + 'T00:00') : '',
       current_task: c.current_task,
       case_status: c.case_status,
       is_active: c.is_active,
@@ -278,6 +290,11 @@ export default function DirectorCasesPage() {
 
   const fmtDate = (d: string | null) => {
     if (!d) return ''
+    if (d.includes('T')) {
+      const [datePart, timePart] = d.split('T')
+      const time = timePart.slice(0, 5)
+      return time === '00:00' ? datePart.replace(/-/g, '/') : `${datePart.replace(/-/g, '/')} ${time}`
+    }
     return d.replace(/-/g, '/')
   }
 
@@ -355,7 +372,7 @@ export default function DirectorCasesPage() {
   const TableHead = () => (
     <thead>
       <tr className="border-b border-gray-200 bg-gray-50/80">
-        {['No','案件名','クライアント','ディレクター','営業','アシスタント','次回','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ',''].map((h, i) => (
+        {['No','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ',''].map((h, i) => (
           <th key={i} className="px-3 py-2.5 text-left text-[10px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
         ))}
       </tr>
@@ -489,24 +506,28 @@ export default function DirectorCasesPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden -mx-6">
         {loading ? (
           <div className="py-16 text-center text-gray-400 text-sm">読み込み中...</div>
-        ) : view === 'by_director' && byDirector ? (
+        ) : (view === 'by_director' && byDirector) || (view === 'by_sales' && bySales) ? (
           <div>
-            {Object.keys(byDirector).length === 0 ? (
-              <div className="py-12 text-center text-gray-300 text-sm">案件がありません</div>
-            ) : Object.entries(byDirector).map(([dirEmail, dirCases], idx) => {
-              const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
-              return (
-                <div key={dirEmail}>
-                  <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
-                    <span className={clsx('text-sm font-bold', color.text)}>
-                      {dirEmail === '__none__' ? '未設定' : (memberNames[dirEmail] || dirEmail)}
-                    </span>
-                    <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{dirCases.length}件</span>
+            {(() => {
+              const groups = view === 'by_director' ? byDirector! : bySales!
+              const emailKey = view === 'by_director' ? 'director' : 'sales'
+              return Object.keys(groups).length === 0 ? (
+                <div className="py-12 text-center text-gray-300 text-sm">案件がありません</div>
+              ) : Object.entries(groups).map(([email, grpCases], idx) => {
+                const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
+                return (
+                  <div key={`${emailKey}-${email}`}>
+                    <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
+                      <span className={clsx('text-sm font-bold', color.text)}>
+                        {email === '__none__' ? '未設定' : (memberNames[email] || email)}
+                      </span>
+                      <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{grpCases.length}件</span>
+                    </div>
+                    {renderTable(grpCases)}
                   </div>
-                  {renderTable(dirCases)}
-                </div>
-              )
-            })}
+                )
+              })
+            })()}
           </div>
         ) : view === 'this_month' ? (
           <div>
@@ -622,11 +643,11 @@ export default function DirectorCasesPage() {
                   </select>
                 </div>
 
-                {/* 次回 */}
+                {/* 次回予定 */}
                 <div>
-                  <label className={labelClass}>次回</label>
+                  <label className={labelClass}>次回予定</label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={form.next_date}
                     onChange={e => setForm(f => ({ ...f, next_date: e.target.value }))}
                     className={inputClass}
