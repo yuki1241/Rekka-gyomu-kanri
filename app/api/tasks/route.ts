@@ -59,7 +59,10 @@ export async function GET(req: NextRequest) {
   if (projectId) query = query.eq('project_id', projectId)
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[tasks GET error]', error.message, error.details, error.hint)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
   return NextResponse.json(data)
 }
 
