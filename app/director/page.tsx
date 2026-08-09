@@ -30,10 +30,11 @@ interface DirectorCase {
   updated_at: string
 }
 
-type ViewType = 'all' | 'active' | 'by_director' | 'by_sales' | 'this_month' | 'by_priority' | 'archived'
+type ViewType = 'all' | 'active' | 'by_director' | 'by_sales' | 'by_month' | 'this_month' | 'by_priority' | 'archived'
 
 const VIEWS: { key: ViewType; label: string }[] = [
   { key: 'all', label: '全案件一覧' },
+  { key: 'by_month', label: '更新月' },
   { key: 'by_sales', label: '営業別' },
   { key: 'by_director', label: 'ディレクター別' },
   { key: 'this_month', label: '今月タスク' },
@@ -196,6 +197,34 @@ export default function DirectorCasesPage() {
       const key = c.sales_email || '__none__'
       if (!groups[key]) groups[key] = []
       groups[key].push(c)
+    }
+    return groups
+  })()
+
+  const MONTH_GROUPS: { key: string; label: string; color: { bg: string; border: string; text: string; badge: string } }[] = [
+    { key: '初月', label: '初月', color: { bg: 'bg-sky-50', border: 'border-sky-100', text: 'text-sky-700', badge: 'bg-sky-100 text-sky-500' } },
+    { key: '3か月目', label: '3か月目', color: { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-500' } },
+    { key: '5か月目', label: '5か月目', color: { bg: 'bg-purple-50', border: 'border-purple-100', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-500' } },
+    { key: '半年', label: '半年以上', color: { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-rose-100 text-rose-500' } },
+    { key: 'other', label: '開始日未設定', color: { bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-500', badge: 'bg-gray-100 text-gray-400' } },
+  ]
+
+  const byMonth = (() => {
+    if (view !== 'by_month') return null
+    const now = new Date()
+    const getGroup = (startDate: string | null): string => {
+      if (!startDate) return 'other'
+      const start = new Date(startDate)
+      const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+      if (months <= 1) return '初月'
+      if (months <= 3) return '3か月目'
+      if (months <= 5) return '5か月目'
+      return '半年'
+    }
+    const groups: Record<string, DirectorCase[]> = { '初月': [], '3か月目': [], '5か月目': [], '半年': [], 'other': [] }
+    const sorted = [...activeCases].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    for (const c of sorted) {
+      groups[getGroup(c.start_date)].push(c)
     }
     return groups
   })()
@@ -373,7 +402,7 @@ export default function DirectorCasesPage() {
     <thead>
       <tr className="border-b border-gray-200 bg-gray-50/80">
         {['No','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ',''].map((h, i) => (
-          <th key={i} className="px-3 py-2.5 text-left text-[10px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+          <th key={i} className="px-2 py-2 text-left text-[9px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
         ))}
       </tr>
     </thead>
@@ -381,34 +410,34 @@ export default function DirectorCasesPage() {
 
   const rowCells = (c: DirectorCase) => (
     <>
-      <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">{c.case_number}</td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className="text-sm font-semibold text-gray-900">{c.case_name}</span>
+      <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap">{c.case_number}</td>
+      <td className="px-2 py-2 whitespace-nowrap">
+        <span className="text-[11px] font-semibold text-gray-900">{c.case_name}</span>
       </td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{c.client_name}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{memberNames[c.director_email] || c.director_email || '—'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{memberNames[c.sales_email] || c.sales_email || '—'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{memberNames[c.assistant_email] || c.assistant_email || '—'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.next_date)}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-700 whitespace-nowrap max-w-[220px]">
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{c.client_name}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{memberNames[c.director_email] || c.director_email || '—'}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{memberNames[c.sales_email] || c.sales_email || '—'}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{c.assistant_email || '—'}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(c.next_date)}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-700 whitespace-nowrap max-w-[180px]">
         <span className="block truncate">{c.current_task}</span>
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', STATUS_STYLES[c.case_status] ?? 'bg-gray-100 text-gray-600')}>
+      <td className="px-2 py-2 whitespace-nowrap">
+        <span className={clsx('text-[9px] px-1 py-0.5 rounded font-bold', STATUS_STYLES[c.case_status] ?? 'bg-gray-100 text-gray-600')}>
           {c.case_status}
         </span>
       </td>
-      <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">{fmtUpdated(c.updated_at)}</td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-bold', PRIORITY_STYLES[c.priority] ?? 'bg-gray-100 text-gray-500')}>
+      <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap">{fmtUpdated(c.updated_at)}</td>
+      <td className="px-2 py-2 whitespace-nowrap">
+        <span className={clsx('text-[9px] px-1 py-0.5 rounded font-bold', PRIORITY_STYLES[c.priority] ?? 'bg-gray-100 text-gray-500')}>
           {c.priority}
         </span>
       </td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">
         {c.sales_estimate != null ? `¥${Number(c.sales_estimate).toLocaleString()}` : '—'}
       </td>
-      <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{fmtDate(c.start_date)}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap max-w-[160px]">
+      <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(c.start_date)}</td>
+      <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap max-w-[140px]">
         <span className="block truncate">{c.memo || '—'}</span>
       </td>
     </>
@@ -417,11 +446,11 @@ export default function DirectorCasesPage() {
   const renderRow = (c: DirectorCase) => (
     <tr key={c.id} className="hover:bg-orange-50/30 border-b border-gray-100 transition-colors">
       {rowCells(c)}
-      <td className="px-3 py-2.5 pr-6 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <button onClick={() => openEdit(c)} className="text-xs text-gray-400 hover:text-orange-500 px-1.5 py-1 hover:bg-orange-50 rounded transition-colors">編集</button>
-          <button onClick={() => archiveCase(c.id)} className="text-gray-300 hover:text-red-400 transition-colors py-1" title="終了案件へ移動">
-            <Trash2 size={12} />
+      <td className="px-2 py-2 pr-4 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => openEdit(c)} className="text-[11px] text-gray-400 hover:text-orange-500 px-1 py-0.5 hover:bg-orange-50 rounded transition-colors">編集</button>
+          <button onClick={() => archiveCase(c.id)} className="text-gray-300 hover:text-red-400 transition-colors" title="終了案件へ移動">
+            <Trash2 size={11} />
           </button>
         </div>
       </td>
@@ -431,11 +460,11 @@ export default function DirectorCasesPage() {
   const renderArchivedRow = (c: DirectorCase) => (
     <tr key={c.id} className="hover:bg-gray-50/50 border-b border-gray-100 transition-colors opacity-70">
       {rowCells(c)}
-      <td className="px-3 py-2.5 pr-6 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          <button onClick={() => restoreCase(c.id)} className="text-xs text-gray-400 hover:text-green-600 px-1.5 py-1 hover:bg-green-50 rounded transition-colors">復元</button>
-          <button onClick={() => permanentDelete(c.id)} className="text-gray-300 hover:text-red-500 transition-colors py-1" title="完全削除">
-            <Trash2 size={12} />
+      <td className="px-2 py-2 pr-4 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => restoreCase(c.id)} className="text-[11px] text-gray-400 hover:text-green-600 px-1 py-0.5 hover:bg-green-50 rounded transition-colors">復元</button>
+          <button onClick={() => permanentDelete(c.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="完全削除">
+            <Trash2 size={11} />
           </button>
         </div>
       </td>
@@ -528,6 +557,21 @@ export default function DirectorCasesPage() {
                 )
               })
             })()}
+          </div>
+        ) : view === 'by_month' && byMonth ? (
+          <div>
+            {MONTH_GROUPS.map(({ key, label, color }) => {
+              const grpCases = byMonth[key] ?? []
+              return (
+                <div key={key}>
+                  <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
+                    <span className={clsx('text-sm font-bold', color.text)}>{label}</span>
+                    <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{grpCases.length}件</span>
+                  </div>
+                  {renderTable(grpCases)}
+                </div>
+              )
+            })}
           </div>
         ) : view === 'this_month' ? (
           <div>
@@ -654,14 +698,12 @@ export default function DirectorCasesPage() {
                 {/* アシスタント */}
                 <div>
                   <label className={labelClass}>アシスタント</label>
-                  <select
+                  <input
                     value={form.assistant_email}
                     onChange={e => setForm(f => ({ ...f, assistant_email: e.target.value }))}
                     className={inputClass}
-                  >
-                    <option value="">未設定</option>
-                    {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
-                  </select>
+                    placeholder="アシスタント名を入力"
+                  />
                 </div>
 
                 {/* 次回予定 */}
