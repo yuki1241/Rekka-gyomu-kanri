@@ -206,6 +206,7 @@ export default function DirectorCasesPage() {
     { key: '3か月目', label: '3か月目', color: { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-500' } },
     { key: '5か月目', label: '5か月目', color: { bg: 'bg-purple-50', border: 'border-purple-100', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-500' } },
     { key: '半年', label: '半年以上', color: { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-rose-100 text-rose-500' } },
+    { key: '1年以上', label: '1年以上', color: { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700', badge: 'bg-red-100 text-red-500' } },
     { key: 'other', label: '開始日未設定', color: { bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-500', badge: 'bg-gray-100 text-gray-400' } },
   ]
 
@@ -219,9 +220,10 @@ export default function DirectorCasesPage() {
       if (months <= 1) return '初月'
       if (months <= 3) return '3か月目'
       if (months <= 5) return '5か月目'
-      return '半年'
+      if (months <= 11) return '半年'
+      return '1年以上'
     }
-    const groups: Record<string, DirectorCase[]> = { '初月': [], '3か月目': [], '5か月目': [], '半年': [], 'other': [] }
+    const groups: Record<string, DirectorCase[]> = { '初月': [], '3か月目': [], '5か月目': [], '半年': [], '1年以上': [], 'other': [] }
     const sorted = [...activeCases].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     for (const c of sorted) {
       groups[getGroup(c.start_date)].push(c)
