@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Trash2, X, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, Briefcase, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 
 interface Member { id: string; email: string; name: string }
@@ -107,6 +107,10 @@ export default function DirectorCasesPage() {
   const [saving, setSaving] = useState(false)
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear())
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth())
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const toggleExpand = (id: string) => setExpandedIds(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
+  })
 
   useEffect(() => {
     fetch('/api/members')
@@ -403,7 +407,7 @@ export default function DirectorCasesPage() {
   const TableHead = () => (
     <thead>
       <tr className="border-b border-gray-200 bg-gray-50/80">
-        {['','No','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ'].map((h, i) => (
+        {['','No','','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日'].map((h, i) => (
           <th key={i} className="px-2 py-2 text-left text-[9px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
         ))}
       </tr>
@@ -412,7 +416,6 @@ export default function DirectorCasesPage() {
 
   const rowCells = (c: DirectorCase) => (
     <>
-      <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap">{c.case_number}</td>
       <td className="px-2 py-2 whitespace-nowrap">
         <span className="text-[11px] font-semibold text-gray-900">{c.case_name}</span>
       </td>
@@ -439,39 +442,72 @@ export default function DirectorCasesPage() {
         {c.sales_estimate != null ? `¥${Number(c.sales_estimate).toLocaleString()}` : '—'}
       </td>
       <td className="px-2 py-2 text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(c.start_date)}</td>
-      <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap max-w-[140px]">
-        <span className="block truncate">{c.memo || '—'}</span>
-      </td>
     </>
   )
 
-  const renderRow = (c: DirectorCase) => (
-    <tr key={c.id} className="hover:bg-orange-50/30 border-b border-gray-100 transition-colors">
-      <td className="pl-3 pr-1 py-2 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => openEdit(c)} className="text-[11px] text-gray-400 hover:text-orange-500 px-1 py-0.5 hover:bg-orange-50 rounded transition-colors">編集</button>
-          <button onClick={() => archiveCase(c.id)} className="text-gray-300 hover:text-red-400 transition-colors" title="終了案件へ移動">
-            <Trash2 size={11} />
-          </button>
-        </div>
-      </td>
-      {rowCells(c)}
-    </tr>
-  )
+  const renderRow = (c: DirectorCase) => {
+    const expanded = expandedIds.has(c.id)
+    return (
+      <Fragment key={c.id}>
+        <tr className="hover:bg-orange-50/30 border-b border-gray-100 transition-colors">
+          <td className="pl-2 pr-0 py-2 whitespace-nowrap">
+            <button onClick={() => toggleExpand(c.id)} className="text-gray-300 hover:text-gray-500 transition-colors p-1">
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+          </td>
+          <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap">{c.case_number}</td>
+          <td className="pl-1 pr-2 py-2 whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => openEdit(c)} className="text-[11px] text-gray-400 hover:text-orange-500 px-1 py-0.5 hover:bg-orange-50 rounded transition-colors">編集</button>
+              <button onClick={() => archiveCase(c.id)} className="text-gray-300 hover:text-red-400 transition-colors" title="終了案件へ移動">
+                <Trash2 size={11} />
+              </button>
+            </div>
+          </td>
+          {rowCells(c)}
+        </tr>
+        {expanded && (
+          <tr className="bg-amber-50/40 border-b border-gray-100">
+            <td colSpan={15} className="pl-10 pr-6 py-3">
+              <p className="text-xs text-gray-600 whitespace-pre-wrap">{c.memo || '（メモなし）'}</p>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
-  const renderArchivedRow = (c: DirectorCase) => (
-    <tr key={c.id} className="hover:bg-gray-50/50 border-b border-gray-100 transition-colors opacity-70">
-      <td className="pl-3 pr-1 py-2 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => restoreCase(c.id)} className="text-[11px] text-gray-400 hover:text-green-600 px-1 py-0.5 hover:bg-green-50 rounded transition-colors">復元</button>
-          <button onClick={() => permanentDelete(c.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="完全削除">
-            <Trash2 size={11} />
-          </button>
-        </div>
-      </td>
-      {rowCells(c)}
-    </tr>
-  )
+  const renderArchivedRow = (c: DirectorCase) => {
+    const expanded = expandedIds.has(c.id)
+    return (
+      <Fragment key={c.id}>
+        <tr className="hover:bg-gray-50/50 border-b border-gray-100 transition-colors opacity-70">
+          <td className="pl-2 pr-0 py-2 whitespace-nowrap">
+            <button onClick={() => toggleExpand(c.id)} className="text-gray-300 hover:text-gray-500 transition-colors p-1">
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+          </td>
+          <td className="px-2 py-2 text-[11px] text-gray-400 whitespace-nowrap">{c.case_number}</td>
+          <td className="pl-1 pr-2 py-2 whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => restoreCase(c.id)} className="text-[11px] text-gray-400 hover:text-green-600 px-1 py-0.5 hover:bg-green-50 rounded transition-colors">復元</button>
+              <button onClick={() => permanentDelete(c.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="完全削除">
+                <Trash2 size={11} />
+              </button>
+            </div>
+          </td>
+          {rowCells(c)}
+        </tr>
+        {expanded && (
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <td colSpan={15} className="pl-10 pr-6 py-3">
+              <p className="text-xs text-gray-600 whitespace-pre-wrap">{c.memo || '（メモなし）'}</p>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
   const renderTable = (rows: DirectorCase[], archived = false) => (
     <div className="overflow-x-auto">
