@@ -403,7 +403,7 @@ export default function DirectorCasesPage() {
   const TableHead = () => (
     <thead>
       <tr className="border-b border-gray-200 bg-gray-50/80">
-        {['No','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ',''].map((h, i) => (
+        {['','No','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日','メモ'].map((h, i) => (
           <th key={i} className="px-2 py-2 text-left text-[9px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
         ))}
       </tr>
@@ -447,8 +447,7 @@ export default function DirectorCasesPage() {
 
   const renderRow = (c: DirectorCase) => (
     <tr key={c.id} className="hover:bg-orange-50/30 border-b border-gray-100 transition-colors">
-      {rowCells(c)}
-      <td className="px-2 py-2 pr-4 whitespace-nowrap">
+      <td className="pl-3 pr-1 py-2 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
           <button onClick={() => openEdit(c)} className="text-[11px] text-gray-400 hover:text-orange-500 px-1 py-0.5 hover:bg-orange-50 rounded transition-colors">編集</button>
           <button onClick={() => archiveCase(c.id)} className="text-gray-300 hover:text-red-400 transition-colors" title="終了案件へ移動">
@@ -456,13 +455,13 @@ export default function DirectorCasesPage() {
           </button>
         </div>
       </td>
+      {rowCells(c)}
     </tr>
   )
 
   const renderArchivedRow = (c: DirectorCase) => (
     <tr key={c.id} className="hover:bg-gray-50/50 border-b border-gray-100 transition-colors opacity-70">
-      {rowCells(c)}
-      <td className="px-2 py-2 pr-4 whitespace-nowrap">
+      <td className="pl-3 pr-1 py-2 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
           <button onClick={() => restoreCase(c.id)} className="text-[11px] text-gray-400 hover:text-green-600 px-1 py-0.5 hover:bg-green-50 rounded transition-colors">復元</button>
           <button onClick={() => permanentDelete(c.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="完全削除">
@@ -470,6 +469,7 @@ export default function DirectorCasesPage() {
           </button>
         </div>
       </td>
+      {rowCells(c)}
     </tr>
   )
 
