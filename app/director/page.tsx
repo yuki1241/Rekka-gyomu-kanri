@@ -27,20 +27,32 @@ interface DirectorCase {
   start_date: string | null
   manhours_sheet: string
   memo: string
+  case_stage: string
   updated_at: string
 }
 
-type ViewType = 'all' | 'active' | 'by_director' | 'by_sales' | 'by_month' | 'this_month' | 'by_priority' | 'archived'
+type ViewType = 'all' | 'new_case' | 'active' | 'by_director' | 'by_sales' | 'by_month' | 'this_month' | 'archived'
 
 const VIEWS: { key: ViewType; label: string }[] = [
   { key: 'all', label: '全案件一覧' },
+  { key: 'new_case', label: '新規案件' },
   { key: 'by_month', label: '更新月' },
   { key: 'by_sales', label: '営業別' },
   { key: 'by_director', label: 'ディレクター別' },
   { key: 'this_month', label: '今月タスク' },
-  { key: 'by_priority', label: '優先度別管理' },
   { key: 'archived', label: '終了案件' },
 ]
+
+const NEW_CASE_STAGES = ['人選中', 'スキルシート提出', '面談', '面談完了', 'トライアル待ち', '本契約'] as const
+
+const STAGE_STYLES: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  '人選中':         { bg: 'bg-slate-50',   border: 'border-slate-100',  text: 'text-slate-700',  badge: 'bg-slate-100 text-slate-500' },
+  'スキルシート提出': { bg: 'bg-blue-50',    border: 'border-blue-100',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-500' },
+  '面談':           { bg: 'bg-indigo-50',  border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-500' },
+  '面談完了':       { bg: 'bg-violet-50',  border: 'border-violet-100', text: 'text-violet-700', badge: 'bg-violet-100 text-violet-500' },
+  'トライアル待ち':  { bg: 'bg-amber-50',   border: 'border-amber-100',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-600' },
+  '本契約':         { bg: 'bg-green-50',   border: 'border-green-100',  text: 'text-green-700',  badge: 'bg-green-100 text-green-600' },
+}
 
 const STATUS_STYLES: Record<string, string> = {
   '継続案件': 'bg-blue-100 text-blue-700',
@@ -92,6 +104,7 @@ const emptyForm = () => ({
   start_date: '',
   manhours_sheet: '',
   memo: '',
+  case_stage: '',
 })
 
 export default function DirectorCasesPage() {
@@ -108,6 +121,7 @@ export default function DirectorCasesPage() {
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear())
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth())
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [ganttTab, setGanttTab] = useState<'deadline' | 'by_person' | 'person_tasks'>('deadline')
   const toggleExpand = (id: string) => setExpandedIds(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
@@ -159,11 +173,6 @@ export default function DirectorCasesPage() {
           if (!c.next_date) return false
           const d = new Date(c.next_date)
           return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
-        })
-      case 'by_priority':
-        return [...activeCases].sort((a, b) => {
-          const order: Record<string, number> = { '高': 0, '中': 1, '低': 2 }
-          return (order[a.priority] ?? 3) - (order[b.priority] ?? 3)
         })
       default:
         return activeCases
@@ -260,6 +269,7 @@ export default function DirectorCasesPage() {
       start_date: c.start_date ?? '',
       manhours_sheet: c.manhours_sheet,
       memo: c.memo,
+      case_stage: c.case_stage ?? '',
     })
     setShowForm(true)
   }
@@ -337,6 +347,151 @@ export default function DirectorCasesPage() {
     if (!ts) return ''
     const d = new Date(ts)
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  const renderGanttDeadline = () => {
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+    const todayDate = new Date()
+    const isCurrentMonth = todayDate.getFullYear() === calendarYear && todayDate.getMonth() === calendarMonth
+    const todayDay = isCurrentMonth ? todayDate.getDate() : -1
+    const ganttCases = activeCases.filter(c => {
+      if (!c.next_date) return false
+      const d = new Date(c.next_date)
+      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
+    })
+    const DOW = ['日','月','火','水','木','金','土']
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50/80 border-b border-gray-200">
+              <th className="sticky left-0 z-10 bg-gray-50/80 px-3 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap min-w-[160px]">案件名</th>
+              <th className="px-2 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap">担当</th>
+              {Array.from({ length: daysInMonth }, (_, i) => {
+                const d = i + 1
+                const dow = new Date(calendarYear, calendarMonth, d).getDay()
+                return (
+                  <th key={d} className={clsx('w-7 py-2 text-center text-[9px] font-semibold',
+                    d === todayDay ? 'text-orange-500' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-400'
+                  )}>
+                    <div>{d}</div>
+                    <div className="font-normal">{DOW[dow]}</div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {ganttCases.length === 0 ? (
+              <tr><td colSpan={daysInMonth + 2} className="px-4 py-10 text-center text-gray-300 text-sm">この月の案件はありません</td></tr>
+            ) : ganttCases.map(c => {
+              const day = c.next_date ? new Date(c.next_date).getDate() : null
+              const time = c.next_date?.includes('T') ? c.next_date.split('T')[1].slice(0, 5) : null
+              return (
+                <tr key={c.id} className="border-b border-gray-100 hover:bg-orange-50/20 transition-colors">
+                  <td className="sticky left-0 z-10 bg-white px-3 py-2 text-[11px] font-semibold text-gray-800 whitespace-nowrap max-w-[200px]">
+                    <button onClick={() => openEdit(c)} className="hover:text-orange-500 transition-colors truncate block max-w-full text-left">{c.case_name}</button>
+                  </td>
+                  <td className="px-2 py-2 text-[10px] text-gray-500 whitespace-nowrap">{memberNames[c.director_email] || '—'}</td>
+                  {Array.from({ length: daysInMonth }, (_, i) => {
+                    const d = i + 1
+                    const isToday = d === todayDay
+                    const hasTask = day === d
+                    const dow = new Date(calendarYear, calendarMonth, d).getDay()
+                    return (
+                      <td key={d} className={clsx('text-center px-0 py-1.5 relative',
+                        isToday ? 'bg-orange-50/40' : dow === 0 || dow === 6 ? 'bg-gray-50/50' : ''
+                      )}>
+                        {hasTask && (
+                          <button onClick={() => openEdit(c)} title={time ? `${c.case_name} ${time}` : c.case_name}
+                            className="w-5 h-5 rounded-full bg-orange-400 hover:bg-orange-500 mx-auto flex items-center justify-center transition-colors">
+                            {time && <span className="text-[7px] text-white font-bold leading-none">{time.replace(':','')}</span>}
+                          </button>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  const renderGanttByPerson = () => {
+    const groups: Record<string, DirectorCase[]> = {}
+    const monthCases = activeCases.filter(c => {
+      if (!c.next_date) return false
+      const d = new Date(c.next_date)
+      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
+    })
+    for (const c of monthCases) {
+      const key = c.director_email || '__none__'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(c)
+    }
+    return Object.entries(groups).length === 0 ? (
+      <div className="py-12 text-center text-gray-300 text-sm">この月の案件はありません</div>
+    ) : (
+      <div>
+        {Object.entries(groups).map(([email, grpCases], idx) => {
+          const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
+          return (
+            <div key={email}>
+              <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
+                <span className={clsx('text-sm font-bold', color.text)}>{email === '__none__' ? '未設定' : memberNames[email] || email}</span>
+                <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{grpCases.length}件</span>
+              </div>
+              {renderTable(grpCases)}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const renderGanttPersonTasks = () => {
+    const groups: Record<string, DirectorCase[]> = {}
+    const monthCases = activeCases.filter(c => {
+      if (!c.next_date) return false
+      const d = new Date(c.next_date)
+      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
+    })
+    for (const c of monthCases) {
+      const key = c.director_email || '__none__'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(c)
+    }
+    return Object.entries(groups).length === 0 ? (
+      <div className="py-12 text-center text-gray-300 text-sm">この月の案件はありません</div>
+    ) : (
+      <div>
+        {Object.entries(groups).map(([email, grpCases], idx) => {
+          const sorted = [...grpCases].sort((a, b) => (a.next_date ?? '').localeCompare(b.next_date ?? ''))
+          const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
+          return (
+            <div key={email}>
+              <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
+                <span className={clsx('text-sm font-bold', color.text)}>{email === '__none__' ? '未設定' : memberNames[email] || email}</span>
+                <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{sorted.length}件</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {sorted.map(c => (
+                  <div key={c.id} className="flex items-center gap-4 px-5 py-2.5 hover:bg-orange-50/20 transition-colors">
+                    <span className="text-[11px] text-gray-500 whitespace-nowrap w-24 flex-shrink-0">{fmtDate(c.next_date)}</span>
+                    <button onClick={() => openEdit(c)} className="text-[12px] font-semibold text-gray-800 hover:text-orange-500 transition-colors text-left truncate flex-1">{c.case_name}</button>
+                    <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{c.current_task || '—'}</span>
+                    <span className={clsx('text-[9px] px-1.5 py-0.5 rounded font-bold flex-shrink-0', STATUS_STYLES[c.case_status] ?? 'bg-gray-100 text-gray-600')}>{c.case_status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   const renderCalendarCard = (c: DirectorCase) => (
@@ -613,26 +768,42 @@ export default function DirectorCasesPage() {
           </div>
         ) : view === 'this_month' ? (
           <div>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-gray-800">{calendarYear}年{calendarMonth + 1}月</span>
+            {/* 月ナビ + サブタブ */}
+            <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-100 flex-wrap gap-2">
               <div className="flex items-center gap-1">
-                <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                  <ChevronLeft size={14} className="text-gray-500" />
-                </button>
-                <button
-                  onClick={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1 hover:bg-gray-100 rounded-lg transition-colors font-medium"
-                >
-                  今日
-                </button>
-                <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                  <ChevronRight size={14} className="text-gray-500" />
-                </button>
+                <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft size={14} className="text-gray-500" /></button>
+                <span className="text-sm font-bold text-gray-800 px-1">{calendarYear}年{calendarMonth + 1}月</span>
+                <button onClick={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">今日</button>
+                <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight size={14} className="text-gray-500" /></button>
+              </div>
+              <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-0.5">
+                {([['deadline','タスク期日'],['by_person','担当'],['person_tasks','担当のタスク']] as const).map(([key, label]) => (
+                  <button key={key} onClick={() => setGanttTab(key)}
+                    className={clsx('px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      ganttTab === key ? 'bg-orange-500 text-white' : 'text-gray-500 hover:text-gray-700'
+                    )}>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
-              {renderCalendarGrid()}
-            </div>
+            {ganttTab === 'deadline' ? renderGanttDeadline() : ganttTab === 'by_person' ? renderGanttByPerson() : renderGanttPersonTasks()}
+          </div>
+        ) : view === 'new_case' ? (
+          <div>
+            {NEW_CASE_STAGES.map(stage => {
+              const s = STAGE_STYLES[stage]
+              const stageCases = activeCases.filter(c => c.case_stage === stage)
+              return (
+                <div key={stage}>
+                  <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', s.bg, s.border)}>
+                    <span className={clsx('text-sm font-bold', s.text)}>{stage}</span>
+                    <span className={clsx('text-xs px-2 py-0.5 rounded-full', s.badge)}>{stageCases.length}件</span>
+                  </div>
+                  {renderTable(stageCases)}
+                </div>
+              )
+            })}
           </div>
         ) : view === 'all' ? (
           <div>
@@ -848,6 +1019,19 @@ export default function DirectorCasesPage() {
                     <span className="text-sm text-gray-700 font-medium">進行中の案件</span>
                   </label>
                 </div>
+              </div>
+
+              {/* 新規案件ステージ */}
+              <div>
+                <label className={labelClass}>新規案件ステージ</label>
+                <select
+                  value={form.case_stage}
+                  onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))}
+                  className={inputClass}
+                >
+                  <option value="">未設定</option>
+                  {NEW_CASE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
 
               {/* 工数シート */}
