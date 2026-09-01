@@ -7,6 +7,17 @@ import clsx from 'clsx'
 
 interface Member { id: string; email: string; name: string }
 
+interface CaseTask {
+  id: string
+  case_id: string
+  title: string
+  assignee_email: string
+  category: string
+  is_completed: boolean
+  due_date: string | null
+  created_at: string
+}
+
 interface DirectorCase {
   id: string
   case_number: number
@@ -28,14 +39,16 @@ interface DirectorCase {
   manhours_sheet: string
   memo: string
   case_stage: string
+  case_media: string
   updated_at: string
 }
 
-type ViewType = 'all' | 'new_case' | 'active' | 'by_director' | 'by_sales' | 'by_month' | 'this_month' | 'archived'
+type ViewType = 'all' | 'new_case' | 'task_list' | 'active' | 'by_director' | 'by_sales' | 'by_month' | 'this_month' | 'archived'
 
 const VIEWS: { key: ViewType; label: string }[] = [
   { key: 'all', label: '全案件一覧' },
   { key: 'new_case', label: '新規案件' },
+  { key: 'task_list', label: 'タスク一覧' },
   { key: 'by_month', label: '更新月' },
   { key: 'by_sales', label: '営業別' },
   { key: 'by_director', label: 'ディレクター別' },
@@ -43,16 +56,19 @@ const VIEWS: { key: ViewType; label: string }[] = [
   { key: 'archived', label: '終了案件' },
 ]
 
-const NEW_CASE_STAGES = ['人選中', 'スキルシート提出', '面談', '面談完了', 'トライアル待ち', '本契約'] as const
+const NEW_CASE_STAGES = ['人選中', 'スキルシート提出', '面談', '面談終わり', 'トライアル待ち', '本契約'] as const
 
 const STAGE_STYLES: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  '人選中':         { bg: 'bg-slate-50',   border: 'border-slate-100',  text: 'text-slate-700',  badge: 'bg-slate-100 text-slate-500' },
+  '人選中':          { bg: 'bg-slate-50',   border: 'border-slate-100',  text: 'text-slate-700',  badge: 'bg-slate-100 text-slate-500' },
   'スキルシート提出': { bg: 'bg-blue-50',    border: 'border-blue-100',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-500' },
-  '面談':           { bg: 'bg-indigo-50',  border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-500' },
-  '面談完了':       { bg: 'bg-violet-50',  border: 'border-violet-100', text: 'text-violet-700', badge: 'bg-violet-100 text-violet-500' },
-  'トライアル待ち':  { bg: 'bg-amber-50',   border: 'border-amber-100',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-600' },
-  '本契約':         { bg: 'bg-green-50',   border: 'border-green-100',  text: 'text-green-700',  badge: 'bg-green-100 text-green-600' },
+  '面談':            { bg: 'bg-indigo-50',  border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-indigo-100 text-indigo-500' },
+  '面談終わり':      { bg: 'bg-violet-50',  border: 'border-violet-100', text: 'text-violet-700', badge: 'bg-violet-100 text-violet-500' },
+  'トライアル待ち':   { bg: 'bg-amber-50',   border: 'border-amber-100',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-600' },
+  '本契約':          { bg: 'bg-green-50',   border: 'border-green-100',  text: 'text-green-700',  badge: 'bg-green-100 text-green-600' },
 }
+
+const MEDIA_OPTIONS = ['', 'ランサーズ', '公式LINE', 'Indeed', 'Wantedly', 'Green', 'リファラル', 'その他']
+const TASK_CATEGORIES = ['週次', '月次', '業務'] as const
 
 const STATUS_STYLES: Record<string, string> = {
   '継続案件': 'bg-blue-100 text-blue-700',
@@ -105,6 +121,7 @@ const emptyForm = () => ({
   manhours_sheet: '',
   memo: '',
   case_stage: '',
+  case_media: '',
 })
 
 export default function DirectorCasesPage() {
@@ -122,6 +139,16 @@ export default function DirectorCasesPage() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth())
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [ganttTab, setGanttTab] = useState<'deadline' | 'by_person' | 'person_tasks'>('deadline')
+  const [allCasesSort, setAllCasesSort] = useState<'default' | 'oldest' | 'sales' | 'active'>('default')
+  const [caseTasks, setCaseTasks] = useState<CaseTask[]>([])
+  const [taskLoading, setTaskLoading] = useState(false)
+  const [newTaskInputs, setNewTaskInputs] = useState<Record<string, { title: string; assignee: string }>>({
+    '業務': { title: '', assignee: '' },
+    '週次': { title: '', assignee: '' },
+    '月次': { title: '', assignee: '' },
+  })
+  const [taskListTab, setTaskListTab] = useState<'週次' | '月次' | '業務'>('業務')
+  const [allTasks, setAllTasks] = useState<CaseTask[]>([])
   const toggleExpand = (id: string) => setExpandedIds(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
@@ -149,6 +176,62 @@ export default function DirectorCasesPage() {
   }, [])
 
   useEffect(() => { fetchCases() }, [fetchCases])
+
+  useEffect(() => {
+    if (!editingCase) { setCaseTasks([]); return }
+    setTaskLoading(true)
+    fetch(`/api/director-case-tasks?case_id=${editingCase.id}`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setCaseTasks(data) })
+      .catch(() => {})
+      .finally(() => setTaskLoading(false))
+  }, [editingCase])
+
+  useEffect(() => {
+    if (view !== 'task_list') return
+    fetch('/api/director-case-tasks')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setAllTasks(data) })
+      .catch(() => {})
+  }, [view])
+
+  const addTaskForCategory = async (category: string) => {
+    const input = newTaskInputs[category]
+    if (!input?.title.trim() || !editingCase) return
+    const body = { case_id: editingCase.id, title: input.title.trim(), category, assignee_email: input.assignee, is_completed: false }
+    const res = await fetch('/api/director-case-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (res.ok) {
+      const created = await res.json()
+      setCaseTasks(prev => [...prev, created])
+      setNewTaskInputs(prev => ({ ...prev, [category]: { ...prev[category], title: '' } }))
+    }
+  }
+
+  const toggleTask = async (task: CaseTask) => {
+    const res = await fetch(`/api/director-case-tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_completed: !task.is_completed }) })
+    if (res.ok) {
+      const updated = await res.json()
+      setCaseTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+      setAllTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+    }
+  }
+
+  const deleteTask = async (id: string) => {
+    const res = await fetch(`/api/director-case-tasks/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setCaseTasks(prev => prev.filter(t => t.id !== id))
+      setAllTasks(prev => prev.filter(t => t.id !== id))
+    }
+  }
+
+  const monthsElapsed = (startDate: string | null): string => {
+    if (!startDate) return '—'
+    const start = new Date(startDate)
+    const now = new Date()
+    const m = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+    if (m <= 0) return '初月'
+    return `${m + 1}か月`
+  }
 
   const prevMonth = () => {
     if (calendarMonth === 0) { setCalendarYear(y => y - 1); setCalendarMonth(11) }
@@ -270,6 +353,7 @@ export default function DirectorCasesPage() {
       manhours_sheet: c.manhours_sheet,
       memo: c.memo,
       case_stage: c.case_stage ?? '',
+      case_media: c.case_media ?? '',
     })
     setShowForm(true)
   }
@@ -349,24 +433,38 @@ export default function DirectorCasesPage() {
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
   }
 
-  const renderGanttDeadline = () => {
+  const renderGanttCombined = () => {
     const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
     const todayDate = new Date()
     const isCurrentMonth = todayDate.getFullYear() === calendarYear && todayDate.getMonth() === calendarMonth
     const todayDay = isCurrentMonth ? todayDate.getDate() : -1
-    const ganttCases = activeCases.filter(c => {
+    const DOW = ['日','月','火','水','木','金','土']
+
+    // 担当別グループ（next_date が今月の案件）
+    const monthCases = activeCases.filter(c => {
       if (!c.next_date) return false
       const d = new Date(c.next_date)
       return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
     })
-    const DOW = ['日','月','火','水','木','金','土']
+    const groups: Record<string, DirectorCase[]> = {}
+    for (const c of monthCases) {
+      const key = c.director_email || '__none__'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(c)
+    }
+    const entries = Object.entries(groups)
+
+    if (entries.length === 0) {
+      return <div className="py-12 text-center text-gray-300 text-sm">この月の案件はありません</div>
+    }
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full text-left border-collapse">
           <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-200">
-              <th className="sticky left-0 z-10 bg-gray-50/80 px-3 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap min-w-[160px]">案件名</th>
-              <th className="px-2 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap">担当</th>
+            <tr className="bg-gray-50/80 border-b border-gray-200 sticky top-0 z-20">
+              <th className="sticky left-0 z-30 bg-gray-50/80 px-3 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap min-w-[160px]">案件名</th>
+              <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 whitespace-nowrap min-w-[140px]">現在タスク</th>
               {Array.from({ length: daysInMonth }, (_, i) => {
                 const d = i + 1
                 const dow = new Date(calendarYear, calendarMonth, d).getDay()
@@ -382,114 +480,60 @@ export default function DirectorCasesPage() {
             </tr>
           </thead>
           <tbody>
-            {ganttCases.length === 0 ? (
-              <tr><td colSpan={daysInMonth + 2} className="px-4 py-10 text-center text-gray-300 text-sm">この月の案件はありません</td></tr>
-            ) : ganttCases.map(c => {
-              const day = c.next_date ? new Date(c.next_date).getDate() : null
-              const time = c.next_date?.includes('T') ? c.next_date.split('T')[1].slice(0, 5) : null
+            {entries.map(([email, grpCases], idx) => {
+              const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
+              const sorted = [...grpCases].sort((a, b) => (a.next_date ?? '').localeCompare(b.next_date ?? ''))
               return (
-                <tr key={c.id} className="border-b border-gray-100 hover:bg-orange-50/20 transition-colors">
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2 text-[11px] font-semibold text-gray-800 whitespace-nowrap max-w-[200px]">
-                    <button onClick={() => openEdit(c)} className="hover:text-orange-500 transition-colors truncate block max-w-full text-left">{c.case_name}</button>
-                  </td>
-                  <td className="px-2 py-2 text-[10px] text-gray-500 whitespace-nowrap">{memberNames[c.director_email] || '—'}</td>
-                  {Array.from({ length: daysInMonth }, (_, i) => {
-                    const d = i + 1
-                    const isToday = d === todayDay
-                    const hasTask = day === d
-                    const dow = new Date(calendarYear, calendarMonth, d).getDay()
+                <Fragment key={email}>
+                  {/* 担当ヘッダー行 */}
+                  <tr>
+                    <td colSpan={daysInMonth + 2}
+                      className={clsx('px-4 py-2 border-y text-sm font-bold', color.bg, color.border, color.text)}>
+                      {email === '__none__' ? '未設定' : memberNames[email] || email}
+                      <span className={clsx('ml-2 text-xs px-2 py-0.5 rounded-full font-normal', color.badge)}>{sorted.length}件</span>
+                    </td>
+                  </tr>
+                  {/* 案件行 */}
+                  {sorted.map(c => {
+                    const day = c.next_date ? new Date(c.next_date).getDate() : null
+                    const time = c.next_date?.includes('T') && c.next_date.split('T')[1].slice(0, 5) !== '00:00'
+                      ? c.next_date.split('T')[1].slice(0, 5) : null
                     return (
-                      <td key={d} className={clsx('text-center px-0 py-1.5 relative',
-                        isToday ? 'bg-orange-50/40' : dow === 0 || dow === 6 ? 'bg-gray-50/50' : ''
-                      )}>
-                        {hasTask && (
-                          <button onClick={() => openEdit(c)} title={time ? `${c.case_name} ${time}` : c.case_name}
-                            className="w-5 h-5 rounded-full bg-orange-400 hover:bg-orange-500 mx-auto flex items-center justify-center transition-colors">
-                            {time && <span className="text-[7px] text-white font-bold leading-none">{time.replace(':','')}</span>}
+                      <tr key={c.id} className="border-b border-gray-100 hover:bg-orange-50/20 transition-colors">
+                        <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap max-w-[200px]">
+                          <button onClick={() => openEdit(c)}
+                            className="text-[11px] font-semibold text-gray-800 hover:text-orange-500 transition-colors truncate block max-w-full text-left">
+                            {c.case_name}
                           </button>
-                        )}
-                      </td>
+                        </td>
+                        <td className="px-3 py-2 text-[10px] text-gray-500 whitespace-nowrap max-w-[160px]">
+                          <span className="block truncate">{c.current_task || '—'}</span>
+                        </td>
+                        {Array.from({ length: daysInMonth }, (_, i) => {
+                          const d = i + 1
+                          const dow = new Date(calendarYear, calendarMonth, d).getDay()
+                          return (
+                            <td key={d} className={clsx('text-center px-0 py-1.5',
+                              d === todayDay ? 'bg-orange-50/40' : dow === 0 || dow === 6 ? 'bg-gray-50/40' : ''
+                            )}>
+                              {day === d && (
+                                <button onClick={() => openEdit(c)}
+                                  title={time ? `${c.case_name} ${time}` : c.case_name}
+                                  className={clsx('w-5 h-5 rounded-full mx-auto flex items-center justify-center transition-colors', color.badge.split(' ')[0].replace('bg-', 'bg-').replace('100', '400'), 'hover:opacity-80')}>
+                                  {time && <span className="text-[7px] text-white font-bold leading-none">{time.replace(':','')}</span>}
+                                </button>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
                     )
                   })}
-                </tr>
+                </Fragment>
               )
             })}
           </tbody>
         </table>
-      </div>
-    )
-  }
-
-  const renderGanttByPerson = () => {
-    const groups: Record<string, DirectorCase[]> = {}
-    const monthCases = activeCases.filter(c => {
-      if (!c.next_date) return false
-      const d = new Date(c.next_date)
-      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
-    })
-    for (const c of monthCases) {
-      const key = c.director_email || '__none__'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(c)
-    }
-    return Object.entries(groups).length === 0 ? (
-      <div className="py-12 text-center text-gray-300 text-sm">この月の案件はありません</div>
-    ) : (
-      <div>
-        {Object.entries(groups).map(([email, grpCases], idx) => {
-          const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
-          return (
-            <div key={email}>
-              <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
-                <span className={clsx('text-sm font-bold', color.text)}>{email === '__none__' ? '未設定' : memberNames[email] || email}</span>
-                <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{grpCases.length}件</span>
-              </div>
-              {renderTable(grpCases)}
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
-  const renderGanttPersonTasks = () => {
-    const groups: Record<string, DirectorCase[]> = {}
-    const monthCases = activeCases.filter(c => {
-      if (!c.next_date) return false
-      const d = new Date(c.next_date)
-      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
-    })
-    for (const c of monthCases) {
-      const key = c.director_email || '__none__'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(c)
-    }
-    return Object.entries(groups).length === 0 ? (
-      <div className="py-12 text-center text-gray-300 text-sm">この月の案件はありません</div>
-    ) : (
-      <div>
-        {Object.entries(groups).map(([email, grpCases], idx) => {
-          const sorted = [...grpCases].sort((a, b) => (a.next_date ?? '').localeCompare(b.next_date ?? ''))
-          const color = DIRECTOR_COLORS[idx % DIRECTOR_COLORS.length]
-          return (
-            <div key={email}>
-              <div className={clsx('px-4 py-2.5 border-b flex items-center gap-2', color.bg, color.border)}>
-                <span className={clsx('text-sm font-bold', color.text)}>{email === '__none__' ? '未設定' : memberNames[email] || email}</span>
-                <span className={clsx('text-xs px-2 py-0.5 rounded-full', color.badge)}>{sorted.length}件</span>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {sorted.map(c => (
-                  <div key={c.id} className="flex items-center gap-4 px-5 py-2.5 hover:bg-orange-50/20 transition-colors">
-                    <span className="text-[11px] text-gray-500 whitespace-nowrap w-24 flex-shrink-0">{fmtDate(c.next_date)}</span>
-                    <button onClick={() => openEdit(c)} className="text-[12px] font-semibold text-gray-800 hover:text-orange-500 transition-colors text-left truncate flex-1">{c.case_name}</button>
-                    <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{c.current_task || '—'}</span>
-                    <span className={clsx('text-[9px] px-1.5 py-0.5 rounded font-bold flex-shrink-0', STATUS_STYLES[c.case_status] ?? 'bg-gray-100 text-gray-600')}>{c.case_status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })}
       </div>
     )
   }
@@ -562,7 +606,7 @@ export default function DirectorCasesPage() {
   const TableHead = () => (
     <thead>
       <tr className="border-b border-gray-200 bg-gray-50/80">
-        {['','No','','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','現在タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日'].map((h, i) => (
+        {['','No','','月数','案件名','クライアント','ディレクター','営業','アシスタント','次回予定','タスク','案件ステータス','最終更新日','優先度','売上見込み','開始日'].map((h, i) => (
           <th key={i} className="px-2 py-2 text-left text-[9px] font-semibold text-gray-500 whitespace-nowrap">{h}</th>
         ))}
       </tr>
@@ -571,6 +615,9 @@ export default function DirectorCasesPage() {
 
   const rowCells = (c: DirectorCase) => (
     <>
+      <td className="px-2 py-2 whitespace-nowrap text-center">
+        <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">{monthsElapsed(c.start_date)}</span>
+      </td>
       <td className="px-2 py-2 whitespace-nowrap">
         <span className="text-[11px] font-semibold text-gray-900">{c.case_name}</span>
       </td>
@@ -623,7 +670,7 @@ export default function DirectorCasesPage() {
         </tr>
         {expanded && (
           <tr className="bg-amber-50/40 border-b border-gray-100">
-            <td colSpan={15} className="pl-10 pr-6 py-3">
+            <td colSpan={16} className="pl-10 pr-6 py-3">
               <p className="text-xs text-gray-600 whitespace-pre-wrap">{c.memo || '（メモなし）'}</p>
             </td>
           </tr>
@@ -655,7 +702,7 @@ export default function DirectorCasesPage() {
         </tr>
         {expanded && (
           <tr className="bg-gray-50 border-b border-gray-100">
-            <td colSpan={15} className="pl-10 pr-6 py-3">
+            <td colSpan={16} className="pl-10 pr-6 py-3">
               <p className="text-xs text-gray-600 whitespace-pre-wrap">{c.memo || '（メモなし）'}</p>
             </td>
           </tr>
@@ -671,7 +718,7 @@ export default function DirectorCasesPage() {
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={16} className="px-4 py-12 text-center text-gray-300 text-sm">案件がありません</td>
+              <td colSpan={17} className="px-4 py-12 text-center text-gray-300 text-sm">案件がありません</td>
             </tr>
           ) : rows.map(c => archived ? renderArchivedRow(c) : renderRow(c))}
         </tbody>
@@ -768,26 +815,13 @@ export default function DirectorCasesPage() {
           </div>
         ) : view === 'this_month' ? (
           <div>
-            {/* 月ナビ + サブタブ */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-100 flex-wrap gap-2">
-              <div className="flex items-center gap-1">
-                <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft size={14} className="text-gray-500" /></button>
-                <span className="text-sm font-bold text-gray-800 px-1">{calendarYear}年{calendarMonth + 1}月</span>
-                <button onClick={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">今日</button>
-                <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight size={14} className="text-gray-500" /></button>
-              </div>
-              <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-0.5">
-                {([['deadline','タスク期日'],['by_person','担当'],['person_tasks','担当のタスク']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setGanttTab(key)}
-                    className={clsx('px-3 py-1 text-xs font-medium rounded-md transition-colors',
-                      ganttTab === key ? 'bg-orange-500 text-white' : 'text-gray-500 hover:text-gray-700'
-                    )}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-1 px-5 py-2.5 border-b border-gray-100">
+              <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft size={14} className="text-gray-500" /></button>
+              <span className="text-sm font-bold text-gray-800 px-1">{calendarYear}年{calendarMonth + 1}月</span>
+              <button onClick={() => { setCalendarYear(new Date().getFullYear()); setCalendarMonth(new Date().getMonth()) }} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">今日</button>
+              <button onClick={nextMonth} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"><ChevronRight size={14} className="text-gray-500" /></button>
             </div>
-            {ganttTab === 'deadline' ? renderGanttDeadline() : ganttTab === 'by_person' ? renderGanttByPerson() : renderGanttPersonTasks()}
+            {renderGanttCombined()}
           </div>
         ) : view === 'new_case' ? (
           <div>
@@ -805,11 +839,59 @@ export default function DirectorCasesPage() {
               )
             })}
           </div>
+        ) : view === 'task_list' ? (
+          <div>
+            <div className="flex gap-2 px-4 py-3 border-b border-gray-100">
+              {TASK_CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setTaskListTab(cat as typeof taskListTab)}
+                  className={clsx('px-3 py-1.5 text-xs rounded-lg font-medium transition-colors',
+                    taskListTab === cat ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {allTasks.filter(t => t.category === taskListTab).length === 0 ? (
+                <p className="py-12 text-center text-gray-300 text-sm">タスクがありません</p>
+              ) : allTasks.filter(t => t.category === taskListTab).map(task => {
+                const c = cases.find(x => x.id === task.case_id)
+                return (
+                  <div key={task.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/50">
+                    <button onClick={() => toggleTask(task)}
+                      className={clsx('w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                        task.is_completed ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-300')}>
+                      {task.is_completed && <span className="text-[10px] font-bold">✓</span>}
+                    </button>
+                    <span className={clsx('flex-1 text-sm', task.is_completed && 'line-through text-gray-400')}>{task.title}</span>
+                    {c && <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{c.case_name}</span>}
+                    {task.assignee_email && <span className="text-[10px] text-gray-500">{memberNames[task.assignee_email] || task.assignee_email}</span>}
+                    <button onClick={() => deleteTask(task.id)} className="text-gray-200 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : view === 'all' ? (
           <div>
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100">
+              <span className="text-[11px] text-gray-500">並び替え:</span>
+              {([['default','デフォルト'],['oldest','古い順'],['sales','売上順'],['active','稼働中順']] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setAllCasesSort(key)}
+                  className={clsx('px-2.5 py-1 text-[10px] rounded font-medium transition-colors',
+                    allCasesSort === key ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {(() => {
-              const unassigned = activeCases.filter(c => !c.assistant_email)
-              const assigned = activeCases.filter(c => !!c.assistant_email)
+              const sortCases = (arr: DirectorCase[]) => {
+                if (allCasesSort === 'oldest') return [...arr].sort((a, b) => (a.case_number ?? 0) - (b.case_number ?? 0))
+                if (allCasesSort === 'sales') return [...arr].sort((a, b) => (b.sales_estimate ?? 0) - (a.sales_estimate ?? 0))
+                if (allCasesSort === 'active') return [...arr].sort((a, b) => Number(b.is_active) - Number(a.is_active))
+                return arr
+              }
+              const unassigned = sortCases(activeCases.filter(c => !c.assistant_email))
+              const assigned = sortCases(activeCases.filter(c => !!c.assistant_email))
               return (
                 <>
                   <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-amber-50 border-amber-100">
@@ -961,16 +1043,146 @@ export default function DirectorCasesPage() {
                 </div>
               </div>
 
-              {/* 現在タスク */}
+              {/* タスク */}
               <div>
-                <label className={labelClass}>現在タスク</label>
+                <label className={labelClass}>タスク</label>
                 <input
                   value={form.current_task}
                   onChange={e => setForm(f => ({ ...f, current_task: e.target.value }))}
                   className={inputClass}
-                  placeholder="現在のタスク内容"
+                  placeholder="タスク内容"
                 />
+                {editingCase && !taskLoading && (() => {
+                  const tasks = caseTasks.filter(t => t.category === '業務')
+                  return (
+                    <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+                      {tasks.length > 0 && (
+                        <div className="divide-y divide-gray-100 max-h-36 overflow-y-auto">
+                          {tasks.map(task => (
+                            <div key={task.id} className="flex items-center gap-2 px-3 py-1.5">
+                              <button onClick={() => toggleTask(task)}
+                                className={clsx('w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                                  task.is_completed ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-300 hover:border-orange-300')}>
+                                {task.is_completed && <span className="text-[8px] font-bold">✓</span>}
+                              </button>
+                              <span className={clsx('flex-1 text-xs', task.is_completed && 'line-through text-gray-400')}>{task.title}</span>
+                              {task.assignee_email && <span className="text-[9px] text-gray-400">{memberNames[task.assignee_email] || task.assignee_email}</span>}
+                              <button onClick={() => deleteTask(task.id)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
+                        <input value={newTaskInputs['業務'].title}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '業務': { ...p['業務'], title: e.target.value } }))}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('業務') } }}
+                          className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
+                          placeholder="タスクを追加..." />
+                        <select value={newTaskInputs['業務'].assignee}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '業務': { ...p['業務'], assignee: e.target.value } }))}
+                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
+                          <option value="">担当未設定</option>
+                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
+                        </select>
+                        <button onClick={() => addTaskForCategory('業務')}
+                          className="px-2.5 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors flex items-center gap-1">
+                          <Plus size={10} />追加
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
+
+              {/* 週次タスク */}
+              {editingCase && !taskLoading && (() => {
+                const tasks = caseTasks.filter(t => t.category === '週次')
+                return (
+                  <div>
+                    <label className={labelClass}>週次タスク</label>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      {tasks.length > 0 && (
+                        <div className="divide-y divide-gray-100 max-h-36 overflow-y-auto">
+                          {tasks.map(task => (
+                            <div key={task.id} className="flex items-center gap-2 px-3 py-1.5">
+                              <button onClick={() => toggleTask(task)}
+                                className={clsx('w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                                  task.is_completed ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 hover:border-blue-300')}>
+                                {task.is_completed && <span className="text-[8px] font-bold">✓</span>}
+                              </button>
+                              <span className={clsx('flex-1 text-xs', task.is_completed && 'line-through text-gray-400')}>{task.title}</span>
+                              {task.assignee_email && <span className="text-[9px] text-gray-400">{memberNames[task.assignee_email] || task.assignee_email}</span>}
+                              <button onClick={() => deleteTask(task.id)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
+                        <input value={newTaskInputs['週次'].title}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '週次': { ...p['週次'], title: e.target.value } }))}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('週次') } }}
+                          className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          placeholder="週次タスクを追加..." />
+                        <select value={newTaskInputs['週次'].assignee}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '週次': { ...p['週次'], assignee: e.target.value } }))}
+                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
+                          <option value="">担当未設定</option>
+                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
+                        </select>
+                        <button onClick={() => addTaskForCategory('週次')}
+                          className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors flex items-center gap-1">
+                          <Plus size={10} />追加
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* 月次タスク */}
+              {editingCase && !taskLoading && (() => {
+                const tasks = caseTasks.filter(t => t.category === '月次')
+                return (
+                  <div>
+                    <label className={labelClass}>月次タスク</label>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      {tasks.length > 0 && (
+                        <div className="divide-y divide-gray-100 max-h-36 overflow-y-auto">
+                          {tasks.map(task => (
+                            <div key={task.id} className="flex items-center gap-2 px-3 py-1.5">
+                              <button onClick={() => toggleTask(task)}
+                                className={clsx('w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                                  task.is_completed ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-300 hover:border-purple-300')}>
+                                {task.is_completed && <span className="text-[8px] font-bold">✓</span>}
+                              </button>
+                              <span className={clsx('flex-1 text-xs', task.is_completed && 'line-through text-gray-400')}>{task.title}</span>
+                              {task.assignee_email && <span className="text-[9px] text-gray-400">{memberNames[task.assignee_email] || task.assignee_email}</span>}
+                              <button onClick={() => deleteTask(task.id)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2 p-2 bg-gray-50 border-t border-gray-100">
+                        <input value={newTaskInputs['月次'].title}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '月次': { ...p['月次'], title: e.target.value } }))}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('月次') } }}
+                          className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-300"
+                          placeholder="月次タスクを追加..." />
+                        <select value={newTaskInputs['月次'].assignee}
+                          onChange={e => setNewTaskInputs(p => ({ ...p, '月次': { ...p['月次'], assignee: e.target.value } }))}
+                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
+                          <option value="">担当未設定</option>
+                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
+                        </select>
+                        <button onClick={() => addTaskForCategory('月次')}
+                          className="px-2.5 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors flex items-center gap-1">
+                          <Plus size={10} />追加
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div className="grid grid-cols-2 gap-4">
                 {/* 開始日 */}
@@ -1021,17 +1233,29 @@ export default function DirectorCasesPage() {
                 </div>
               </div>
 
-              {/* 新規案件ステージ */}
-              <div>
-                <label className={labelClass}>新規案件ステージ</label>
-                <select
-                  value={form.case_stage}
-                  onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))}
-                  className={inputClass}
-                >
-                  <option value="">未設定</option>
-                  {NEW_CASE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+              {/* 新規案件ステージ＋媒体 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>新規案件ステージ</label>
+                  <select
+                    value={form.case_stage}
+                    onChange={e => setForm(f => ({ ...f, case_stage: e.target.value }))}
+                    className={inputClass}
+                  >
+                    <option value="">未設定</option>
+                    {NEW_CASE_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>媒体</label>
+                  <select
+                    value={form.case_media}
+                    onChange={e => setForm(f => ({ ...f, case_media: e.target.value }))}
+                    className={inputClass}
+                  >
+                    {MEDIA_OPTIONS.map(m => <option key={m} value={m}>{m || '未設定'}</option>)}
+                  </select>
+                </div>
               </div>
 
               {/* 工数シート */}
@@ -1056,6 +1280,7 @@ export default function DirectorCasesPage() {
                   placeholder="メモを入力"
                 />
               </div>
+
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
