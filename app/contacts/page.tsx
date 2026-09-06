@@ -283,7 +283,7 @@ export default function ContactsPage() {
     container.addEventListener('scroll', onContainer, { passive: true })
     mirror.addEventListener('scroll', onMirror, { passive: true })
     return () => { container.removeEventListener('scroll', onContainer); mirror.removeEventListener('scroll', onMirror) }
-  }, [sheetData])
+  }, [sheetData, tableScrollWidth])
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
