@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Plus, Pencil, Trash2, X, Search, ExternalLink, Network, Eye, TableProperties, RefreshCw } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -261,6 +261,29 @@ export default function ContactsPage() {
   const toggleCell = (key: string) => setExpandedCells(prev => {
     const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next
   })
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const mirrorScrollRef = useRef<HTMLDivElement>(null)
+  const [tableScrollWidth, setTableScrollWidth] = useState(0)
+  const syncing = useRef(false)
+
+  useEffect(() => {
+    if (!sheetData) return
+    const timer = setTimeout(() => {
+      if (tableContainerRef.current) setTableScrollWidth(tableContainerRef.current.scrollWidth)
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [sheetData])
+
+  useEffect(() => {
+    const container = tableContainerRef.current
+    const mirror = mirrorScrollRef.current
+    if (!container || !mirror) return
+    const onContainer = () => { if (!syncing.current) { syncing.current = true; mirror.scrollLeft = container.scrollLeft; syncing.current = false } }
+    const onMirror = () => { if (!syncing.current) { syncing.current = true; container.scrollLeft = mirror.scrollLeft; syncing.current = false } }
+    container.addEventListener('scroll', onContainer, { passive: true })
+    mirror.addEventListener('scroll', onMirror, { passive: true })
+    return () => { container.removeEventListener('scroll', onContainer); mirror.removeEventListener('scroll', onMirror) }
+  }, [sheetData])
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
@@ -402,59 +425,89 @@ export default function ContactsPage() {
           ) : sheetError ? (
             <div className="py-16 text-center text-red-400 text-sm">{sheetError}</div>
           ) : sheetData && sheetData.headers.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="text-xs border-collapse min-w-max w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                    {sheetData.headers.map((h, i) => (
-                      <th key={i} className="px-2.5 py-2 text-left font-semibold text-gray-500 whitespace-nowrap border-r border-gray-200 last:border-0 bg-gray-50">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const isLong = (h: string) =>
-                      ['紹介文','内容','経歴','悩み','解決策','アポ内容','振り返り'].some(k => h.includes(k))
-                    return sheetData.rows
+            <div>
+              <div className="overflow-x-auto" ref={tableContainerRef}>
+                {(() => {
+                  const colW = (header: string) => {
+                    if (header === 'No') return 38
+                    if (header === '名前') return 76
+                    if (header === '性別') return 50
+                    if (header === '職種') return 80
+                    if (header === '企業名') return 108
+                    if (header === 'HP') return 92
+                    if (header === '役職') return 72
+                    if (header.includes('会った日')) return 74
+                    if (header.includes('きっかけ')) return 108
+                    if (header.includes('繋がり')) return 92
+                    if (header.includes('紹介文')) return 176
+                    if (header.includes('内容')) return 100
+                    if (header.includes('連絡')) return 64
+                    return 92
+                  }
+                  return (
+                <table className="text-[11px] border-collapse w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                      {sheetData.headers.map((h, i) => (
+                        <th key={i} style={{ minWidth: colW(h), maxWidth: colW(h), width: colW(h) }}
+                          className="px-1.5 py-1 text-left font-semibold text-gray-500 whitespace-nowrap border-r border-gray-200 last:border-0 bg-gray-50 overflow-hidden">
+                          <span className="block truncate">{h}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheetData.rows
                       .filter(row => !sheetSearch || Object.values(row).some(v => v.toLowerCase().includes(sheetSearch.toLowerCase())))
                       .map((row, ri) => (
-                        <tr key={ri} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors align-top">
+                        <tr key={ri} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
                           {sheetData.headers.map((h, ci) => {
                             const val = row[h] ?? ''
-                            const lines = val.split('\n')
                             const cellKey = `${ri}-${ci}`
                             const expanded = expandedCells.has(cellKey)
-                            const hasMore = isLong(h) && lines.length > 1
+                            const is紹介文 = h.includes('紹介文')
+                            const hasMore = is紹介文 && val.length > 50
 
                             return (
-                              <td key={ci} className="px-2.5 py-2 border-r border-gray-100 last:border-0 align-top">
-                                {isLong(h) ? (
-                                  <div className={clsx('min-w-[160px] max-w-[260px]')}>
-                                    <span className="block text-gray-700 whitespace-pre-wrap leading-relaxed">
-                                      {expanded ? val : lines[0]}
-                                    </span>
+                              <td key={ci}
+                                style={{ minWidth: colW(h), maxWidth: colW(h), width: colW(h) }}
+                                className="px-1.5 py-1 border-r border-gray-100 last:border-0 overflow-hidden align-middle">
+                                {is紹介文 ? (
+                                  <div>
+                                    <p className={clsx('text-gray-700 leading-relaxed whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}>
+                                      {val}
+                                    </p>
                                     {hasMore && (
                                       <button onClick={() => toggleCell(cellKey)}
                                         className="mt-0.5 text-[10px] text-blue-400 hover:text-blue-600 transition-colors">
-                                        {expanded ? '▲ 閉じる' : `▼ 続きを見る（${lines.length - 1}行）`}
+                                        {expanded ? '▲ 閉じる' : '▼ 続きを見る'}
                                       </button>
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="block whitespace-nowrap max-w-[160px] truncate text-gray-700">{val}</span>
+                                  <span className="block text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">{val}</span>
                                 )}
                               </td>
                             )
                           })}
                         </tr>
                       ))
-                  })()}
-                </tbody>
-              </table>
-              {sheetData.rows.length === 0 && (
-                <p className="text-center py-12 text-gray-300 text-sm">データがありません</p>
+                    }
+                    </tbody>
+                </table>
+                  )
+                })()}
+                {sheetData.rows.length === 0 && (
+                  <p className="text-center py-12 text-gray-300 text-sm">データがありません</p>
+                )}
+              </div>
+              {/* 下部固定スクロールバー */}
+              {tableScrollWidth > 0 && (
+                <div ref={mirrorScrollRef}
+                  className="sticky bottom-0 overflow-x-auto border-t border-gray-200 bg-white z-20"
+                  style={{ height: 14 }}>
+                  <div style={{ width: tableScrollWidth, height: 1 }} />
+                </div>
               )}
             </div>
           ) : (
