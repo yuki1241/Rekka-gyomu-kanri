@@ -426,6 +426,14 @@ export default function ContactsPage() {
             <div className="py-16 text-center text-red-400 text-sm">{sheetError}</div>
           ) : sheetData && sheetData.headers.length > 0 ? (
             <div>
+              {/* 上部スクロールバー */}
+              {tableScrollWidth > 0 && (
+                <div ref={mirrorScrollRef}
+                  className="overflow-x-auto border-b border-gray-200 bg-white"
+                  style={{ height: 14 }}>
+                  <div style={{ width: tableScrollWidth, height: 1 }} />
+                </div>
+              )}
               <div className="overflow-x-auto" ref={tableContainerRef}>
                 {(() => {
                   const colW = (header: string) => {
@@ -501,14 +509,6 @@ export default function ContactsPage() {
                   <p className="text-center py-12 text-gray-300 text-sm">データがありません</p>
                 )}
               </div>
-              {/* 下部固定スクロールバー */}
-              {tableScrollWidth > 0 && (
-                <div ref={mirrorScrollRef}
-                  className="sticky bottom-0 overflow-x-auto border-t border-gray-200 bg-white z-20"
-                  style={{ height: 14 }}>
-                  <div style={{ width: tableScrollWidth, height: 1 }} />
-                </div>
-              )}
             </div>
           ) : (
             <div className="py-16 text-center text-gray-300 text-sm">データがありません</div>
