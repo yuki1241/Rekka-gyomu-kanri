@@ -1088,12 +1088,10 @@ export default function DirectorCasesPage() {
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('業務') } }}
                           className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
                           placeholder="タスクを追加..." />
-                        <select value={newTaskInputs['業務'].assignee}
+                        <input value={newTaskInputs['業務'].assignee}
                           onChange={e => setNewTaskInputs(p => ({ ...p, '業務': { ...p['業務'], assignee: e.target.value } }))}
-                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
-                          <option value="">担当未設定</option>
-                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
-                        </select>
+                          className="w-24 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
+                          placeholder="担当者" />
                         <button onClick={() => addTaskForCategory('業務')}
                           className="px-2.5 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors flex items-center gap-1">
                           <Plus size={10} />追加
@@ -1133,12 +1131,10 @@ export default function DirectorCasesPage() {
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('週次') } }}
                           className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
                           placeholder="週次タスクを追加..." />
-                        <select value={newTaskInputs['週次'].assignee}
+                        <input value={newTaskInputs['週次'].assignee}
                           onChange={e => setNewTaskInputs(p => ({ ...p, '週次': { ...p['週次'], assignee: e.target.value } }))}
-                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
-                          <option value="">担当未設定</option>
-                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
-                        </select>
+                          className="w-24 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          placeholder="担当者" />
                         <button onClick={() => addTaskForCategory('週次')}
                           className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors flex items-center gap-1">
                           <Plus size={10} />追加
@@ -1178,12 +1174,10 @@ export default function DirectorCasesPage() {
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTaskForCategory('月次') } }}
                           className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-300"
                           placeholder="月次タスクを追加..." />
-                        <select value={newTaskInputs['月次'].assignee}
+                        <input value={newTaskInputs['月次'].assignee}
                           onChange={e => setNewTaskInputs(p => ({ ...p, '月次': { ...p['月次'], assignee: e.target.value } }))}
-                          className="border border-gray-200 rounded px-1.5 py-1 text-xs focus:outline-none">
-                          <option value="">担当未設定</option>
-                          {members.map(m => <option key={m.id} value={m.email}>{m.name || m.email}</option>)}
-                        </select>
+                          className="w-24 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-300"
+                          placeholder="担当者" />
                         <button onClick={() => addTaskForCategory('月次')}
                           className="px-2.5 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors flex items-center gap-1">
                           <Plus size={10} />追加
