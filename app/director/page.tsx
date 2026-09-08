@@ -377,6 +377,11 @@ export default function DirectorCasesPage() {
       if (res.ok) {
         const updated = await res.json()
         setCases(prev => prev.map(c => c.id === updated.id ? updated : c))
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert('保存に失敗しました: ' + (err.error || res.status))
+        setSaving(false)
+        return
       }
     } else {
       const res = await fetch('/api/director-cases', {
@@ -387,6 +392,11 @@ export default function DirectorCasesPage() {
       if (res.ok) {
         const created = await res.json()
         setCases(prev => [created, ...prev])
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert('保存に失敗しました: ' + (err.error || res.status))
+        setSaving(false)
+        return
       }
     }
     setSaving(false)
