@@ -48,8 +48,12 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const gid = req.nextUrl.searchParams.get('gid') ?? '0'
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`
+  const gid = req.nextUrl.searchParams.get('gid')
+  const sheet = req.nextUrl.searchParams.get('sheet')
+  const param = sheet
+    ? `sheet=${encodeURIComponent(sheet)}`
+    : `gid=${gid ?? '0'}`
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&${param}`
 
   try {
     const res = await fetch(url, { cache: 'no-store' })

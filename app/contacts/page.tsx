@@ -22,6 +22,8 @@ interface Contact {
   created_at: string
 }
 
+const SHEET_TABS = ['原お繋ぎ', '久保田お繋ぎ', '菅野お繋ぎ', '太附お繋ぎ'] as const
+
 const EMPTY: Omit<Contact, 'id' | 'user_email' | 'display_order' | 'created_at'> = {
   name: '',
   gender: '',
@@ -257,6 +259,7 @@ export default function ContactsPage() {
   const [sheetLoading, setSheetLoading] = useState(false)
   const [sheetError, setSheetError] = useState<string | null>(null)
   const [sheetSearch, setSheetSearch] = useState('')
+  const [selectedSheet, setSelectedSheet] = useState('原お繋ぎ')
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set())
   const toggleCell = (key: string) => setExpandedCells(prev => {
     const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next
@@ -297,11 +300,15 @@ export default function ContactsPage() {
 
   useEffect(() => { fetchContacts() }, [fetchContacts])
 
-  const fetchSheet = useCallback(async () => {
+  const fetchSheet = useCallback(async (sheetName: string) => {
     setSheetLoading(true)
     setSheetError(null)
+    setSheetData(null)
+    setExpandedCells(new Set())
+    setSheetSearch('')
+    setTableScrollWidth(0)
     try {
-      const res = await fetch('/api/sheets')
+      const res = await fetch(`/api/sheets?sheet=${encodeURIComponent(sheetName)}`)
       const data = await res.json()
       if (data.error) setSheetError(data.error)
       else setSheetData(data)
@@ -312,8 +319,8 @@ export default function ContactsPage() {
   }, [])
 
   useEffect(() => {
-    if (activeTab === 'sheet' && !sheetData) fetchSheet()
-  }, [activeTab, sheetData, fetchSheet])
+    if (activeTab === 'sheet') fetchSheet(selectedSheet)
+  }, [activeTab, selectedSheet, fetchSheet])
 
   const handleSave = async (form: typeof EMPTY) => {
     if (editingContact) {
@@ -409,13 +416,25 @@ export default function ContactsPage() {
       {/* スプレッドシートビュー */}
       {activeTab === 'sheet' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* シート選択タブ */}
+          <div className="flex gap-0 border-b border-gray-100 px-4 pt-3">
+            {SHEET_TABS.map(name => (
+              <button key={name} onClick={() => setSelectedSheet(name)}
+                className={clsx('px-3 py-1.5 text-xs font-medium rounded-t border-b-2 -mb-px transition-colors mr-1',
+                  selectedSheet === name
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50')}>
+                {name}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={sheetSearch} onChange={e => setSheetSearch(e.target.value)}
                 placeholder="検索..." className="pl-8 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-48" />
             </div>
-            <button onClick={() => { setSheetData(null); fetchSheet() }}
+            <button onClick={() => fetchSheet(selectedSheet)}
               className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors">
               <RefreshCw size={12} />更新
             </button>
