@@ -3,8 +3,6 @@ import { createServerSupabase } from '@/lib/supabase'
 import { Resend } from 'resend'
 import { uploadJsonToDrive } from '@/lib/google-drive-backup'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const TABLES = [
   'app_users',
   'appointments',
@@ -26,6 +24,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const supabase = createServerSupabase()
   const backup: Record<string, unknown[]> = {}
   const errors: string[] = []

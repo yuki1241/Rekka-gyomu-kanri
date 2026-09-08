@@ -23,10 +23,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const body = await req.json()
+  const allowed = { role: body.role }
   const supabase = createServerSupabase()
   const { data, error } = await supabase
     .from('app_users')
-    .update(body)
+    .update(allowed)
     .eq('id', params.id)
     .select()
     .single()

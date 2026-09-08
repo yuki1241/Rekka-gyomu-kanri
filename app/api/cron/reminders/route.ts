@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 function isReminderDueToday(task: {
   reminder_start: string | null
@@ -44,11 +43,11 @@ function isReminderDueToday(task: {
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const supabase = createServerSupabase()
   const today = new Date().toISOString().split('T')[0]
 

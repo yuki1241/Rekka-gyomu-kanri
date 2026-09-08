@@ -28,11 +28,6 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (dbError || !data) {
-    console.error('[verify-otp] lookup failed:', { email, code: code.trim(), now, dbError })
-    // 期限切れ無視でコードだけ一致するか確認（デバッグ用）
-    const { data: anyRow } = await supabase
-      .from('otp_codes').select('code,expires_at').eq('email', email).single()
-    console.error('[verify-otp] row in DB:', anyRow)
     return NextResponse.json({ error: '認証コードが正しくないか、期限切れです' }, { status: 400 })
   }
 
