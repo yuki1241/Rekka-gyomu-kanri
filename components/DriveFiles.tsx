@@ -51,7 +51,22 @@ export default function DriveFiles({ folderId }: Props) {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
-          setError('フォルダを取得できませんでした。URLを確認してください。')
+          // Google APIの実際のエラーを解析して表示
+          let msg = 'フォルダを取得できませんでした。'
+          try {
+            const parsed = typeof data.error === 'string' ? JSON.parse(data.error) : data.error
+            const code = parsed?.error?.code ?? parsed?.error?.status
+            if (code === 401 || data.error.includes('401') || data.error.includes('invalid_grant')) {
+              msg = '認証が切れています。一度サインアウトして再ログインしてください。'
+            } else if (code === 403 || data.error.includes('403')) {
+              msg = 'このフォルダへのアクセス権がありません。共有設定を確認してください。'
+            } else if (code === 404 || data.error.includes('404')) {
+              msg = 'フォルダが見つかりません。URLまたはIDを確認してください。'
+            } else if (data.error === 'No access token') {
+              msg = '認証情報がありません。再ログインしてください。'
+            }
+          } catch { /* ignore parse errors */ }
+          setError(msg)
         } else {
           setFiles(data.files ?? [])
         }
