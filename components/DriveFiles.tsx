@@ -36,9 +36,10 @@ function formatSize(size?: string) {
 
 interface Props {
   folderId: string
+  rawUrl?: string
 }
 
-export default function DriveFiles({ folderId }: Props) {
+export default function DriveFiles({ folderId, rawUrl }: Props) {
   const [files, setFiles] = useState<DriveFile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -51,19 +52,9 @@ export default function DriveFiles({ folderId }: Props) {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
-          const s = data.status ?? 0
-          const errStr = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
-          let msg = `エラー(${s}): `
-          if (data.error === 'No access token' || s === 401 || errStr.includes('invalid_grant') || errStr.includes('Token has been expired')) {
-            msg = '認証が切れています。一度サインアウトして再ログインしてください。'
-          } else if (s === 403 || errStr.includes('"403"') || errStr.includes('forbidden') || errStr.includes('insufficientPermissions')) {
-            msg = 'アクセス権がありません。フォルダの共有設定を確認してください。'
-          } else if (s === 404 || errStr.includes('"404"') || errStr.includes('notFound')) {
-            msg = 'フォルダが見つかりません。IDまたはURLを確認してください。'
-          } else {
-            msg += errStr.slice(0, 120)
-          }
-          setError(msg)
+          // APIで取得できない場合でもURLは保存済みなので、リンクとして表示
+          setFiles([])
+          setError('fallback')
         } else {
           setFiles(data.files ?? [])
         }
@@ -82,11 +73,17 @@ export default function DriveFiles({ folderId }: Props) {
           読み込み中...
         </div>
       )}
-      {error && (
-        <div className="flex items-center gap-2 text-xs text-red-500 py-2">
-          <AlertCircle size={12} />
-          {error}
-        </div>
+      {error === 'fallback' && (
+        <a
+          href={rawUrl || `https://drive.google.com/drive/folders/${folderId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors group text-xs text-gray-600"
+        >
+          <span className="text-sm">📁</span>
+          <span className="flex-1 truncate group-hover:text-blue-600">Google Drive で開く</span>
+          <ExternalLink size={10} className="text-gray-300 group-hover:text-blue-400 flex-shrink-0" />
+        </a>
       )}
       {!loading && !error && files.length === 0 && (
         <p className="text-xs text-gray-400 py-2">ファイルがありません</p>

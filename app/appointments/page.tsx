@@ -512,7 +512,7 @@ function FormModal({ initial, onClose, onSaved }: FormModalProps) {
               placeholder="フォルダURLまたはID"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             />
-            <DriveFiles folderId={form.drive_folder_id} />
+            <DriveFiles folderId={form.drive_folder_id} rawUrl={driveInput} />
           </div>
         </div>
 
@@ -655,7 +655,7 @@ function DetailModal({ appo, onClose, onEdit, onDelete }: {
           {appo.drive_folder_id && (
             <div>
               <p className="text-xs text-gray-400 mb-1">Google Drive</p>
-              <DriveFiles folderId={appo.drive_folder_id} />
+              <DriveFiles folderId={appo.drive_folder_id} rawUrl={appo.drive_folder_id} />
             </div>
           )}
         </div>
