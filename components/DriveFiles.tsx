@@ -51,21 +51,18 @@ export default function DriveFiles({ folderId }: Props) {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
-          // Google APIの実際のエラーを解析して表示
-          let msg = 'フォルダを取得できませんでした。'
-          try {
-            const parsed = typeof data.error === 'string' ? JSON.parse(data.error) : data.error
-            const code = parsed?.error?.code ?? parsed?.error?.status
-            if (code === 401 || data.error.includes('401') || data.error.includes('invalid_grant')) {
-              msg = '認証が切れています。一度サインアウトして再ログインしてください。'
-            } else if (code === 403 || data.error.includes('403')) {
-              msg = 'このフォルダへのアクセス権がありません。共有設定を確認してください。'
-            } else if (code === 404 || data.error.includes('404')) {
-              msg = 'フォルダが見つかりません。URLまたはIDを確認してください。'
-            } else if (data.error === 'No access token') {
-              msg = '認証情報がありません。再ログインしてください。'
-            }
-          } catch { /* ignore parse errors */ }
+          const s = data.status ?? 0
+          const errStr = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
+          let msg = `エラー(${s}): `
+          if (data.error === 'No access token' || s === 401 || errStr.includes('invalid_grant') || errStr.includes('Token has been expired')) {
+            msg = '認証が切れています。一度サインアウトして再ログインしてください。'
+          } else if (s === 403 || errStr.includes('"403"') || errStr.includes('forbidden') || errStr.includes('insufficientPermissions')) {
+            msg = 'アクセス権がありません。フォルダの共有設定を確認してください。'
+          } else if (s === 404 || errStr.includes('"404"') || errStr.includes('notFound')) {
+            msg = 'フォルダが見つかりません。IDまたはURLを確認してください。'
+          } else {
+            msg += errStr.slice(0, 120)
+          }
           setError(msg)
         } else {
           setFiles(data.files ?? [])

@@ -59,7 +59,8 @@ export async function GET(req: NextRequest) {
 
   if (!res.ok) {
     const err = await res.text()
-    return NextResponse.json({ error: err }, { status: res.status })
+    console.error('[drive] Google API error:', res.status, err.slice(0, 500))
+    return NextResponse.json({ error: err, status: res.status }, { status: res.status })
   }
 
   const data = await res.json()
