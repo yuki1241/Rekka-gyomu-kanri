@@ -4,6 +4,17 @@ import { authOptions } from '@/lib/auth'
 
 const SHEET_ID = '1xv4FAMLL5RRhgmIIbwJEDP1B-pFPIE_Voa7hv805DLQ'
 
+function colIndexToLetter(index: number): string {
+  let letter = ''
+  let n = index + 1
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    letter = String.fromCharCode(65 + rem) + letter
+    n = Math.floor((n - 1) / 26)
+  }
+  return letter
+}
+
 // 改行を含む quoted field に対応した CSV パーサー
 function parseCSV(text: string): string[][] {
   const rows: string[][] = []
@@ -77,4 +88,38 @@ export async function GET(req: NextRequest) {
     console.error('[sheets] fetch error:', e)
     return NextResponse.json({ error: '通信エラーが発生しました' }, { status: 500 })
   }
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const accessToken = (session as { accessToken?: string }).accessToken
+  if (!accessToken) return NextResponse.json({ error: 'No access token' }, { status: 401 })
+
+  const { sheet, rowIndex, colIndex, value } = await req.json()
+  // rowIndex: 0-based data row. Sheet row = rowIndex + 2 (1-based, skip header)
+  const sheetRow = rowIndex + 2
+  const colLetter = colIndexToLetter(colIndex)
+  const range = `'${sheet}'!${colLetter}${sheetRow}`
+
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: [[value]] }),
+    }
+  )
+
+  if (!res.ok) {
+    const err = await res.text()
+    console.error('[sheets] update error:', res.status, err.slice(0, 300))
+    return NextResponse.json({ error: err }, { status: res.status })
+  }
+
+  return NextResponse.json({ ok: true })
 }

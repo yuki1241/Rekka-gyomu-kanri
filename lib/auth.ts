@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
             'profile',
             'https://www.googleapis.com/auth/calendar',
             'https://www.googleapis.com/auth/drive.readonly',
-            'https://www.googleapis.com/auth/spreadsheets.readonly',
+            'https://www.googleapis.com/auth/spreadsheets',
           ].join(' '),
           access_type: 'offline',
           prompt: 'consent',

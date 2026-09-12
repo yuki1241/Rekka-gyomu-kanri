@@ -264,6 +264,38 @@ export default function ContactsPage() {
   const toggleCell = (key: string) => setExpandedCells(prev => {
     const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next
   })
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; colIdx: number } | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [cellSaving, setCellSaving] = useState(false)
+
+  const saveCell = useCallback(async (rowIdx: number, colIdx: number, value: string, header: string) => {
+    setEditingCell(null)
+    if (!sheetData) return
+    const original = sheetData.rows[rowIdx][header] ?? ''
+    if (value === original) return
+    setCellSaving(true)
+    try {
+      const res = await fetch('/api/sheets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheet: selectedSheet, rowIndex: rowIdx, colIndex: colIdx, value }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('保存に失敗しました: ' + (err.error || res.status))
+        return
+      }
+      setSheetData(prev => {
+        if (!prev) return prev
+        const newRows = prev.rows.map((row, i) =>
+          i === rowIdx ? { ...row, [header]: value } : row
+        )
+        return { ...prev, rows: newRows }
+      })
+    } finally {
+      setCellSaving(false)
+    }
+  }, [sheetData, selectedSheet])
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const mirrorScrollRef = useRef<HTMLDivElement>(null)
   const [tableScrollWidth, setTableScrollWidth] = useState(0)
@@ -434,10 +466,17 @@ export default function ContactsPage() {
               <input value={sheetSearch} onChange={e => setSheetSearch(e.target.value)}
                 placeholder="検索..." className="pl-8 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-48" />
             </div>
-            <button onClick={() => fetchSheet(selectedSheet)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-              <RefreshCw size={12} />更新
-            </button>
+            <div className="flex items-center gap-2">
+              {cellSaving && (
+                <span className="text-[11px] text-blue-500 flex items-center gap-1">
+                  <RefreshCw size={11} className="animate-spin" />保存中...
+                </span>
+              )}
+              <button onClick={() => fetchSheet(selectedSheet)}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <RefreshCw size={12} />更新
+              </button>
+            </div>
           </div>
           {sheetLoading ? (
             <div className="py-16 text-center text-gray-400 text-sm">読み込み中...</div>
@@ -485,27 +524,59 @@ export default function ContactsPage() {
                   </thead>
                   <tbody>
                     {sheetData.rows
-                      .filter(row => !sheetSearch || Object.values(row).some(v => v.toLowerCase().includes(sheetSearch.toLowerCase())))
-                      .map((row, ri) => (
-                        <tr key={ri} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
+                      .map((row, originalIdx) => ({ row, originalIdx }))
+                      .filter(({ row }) => !sheetSearch || Object.values(row).some(v => v.toLowerCase().includes(sheetSearch.toLowerCase())))
+                      .map(({ row, originalIdx }) => (
+                        <tr key={originalIdx} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
                           {sheetData.headers.map((h, ci) => {
                             const val = row[h] ?? ''
-                            const cellKey = `${ri}-${ci}`
+                            const cellKey = `${originalIdx}-${ci}`
                             const expanded = expandedCells.has(cellKey)
                             const is紹介文 = h.includes('紹介文')
                             const hasMore = is紹介文 && val.length > 50
+                            const isEditing = editingCell?.rowIdx === originalIdx && editingCell?.colIdx === ci
 
                             return (
                               <td key={ci}
                                 style={{ minWidth: colW(h), maxWidth: colW(h), width: colW(h) }}
-                                className="px-1.5 py-1 border-r border-gray-100 last:border-0 overflow-hidden align-middle">
-                                {is紹介文 ? (
+                                className="px-1.5 py-1 border-r border-gray-100 last:border-0 overflow-hidden align-middle group/cell"
+                                onClick={() => {
+                                  if (!isEditing) {
+                                    setEditingCell({ rowIdx: originalIdx, colIdx: ci })
+                                    setEditValue(val)
+                                  }
+                                }}>
+                                {isEditing ? (
+                                  is紹介文 ? (
+                                    <textarea
+                                      autoFocus
+                                      value={editValue}
+                                      onChange={e => setEditValue(e.target.value)}
+                                      onBlur={() => saveCell(originalIdx, ci, editValue, h)}
+                                      onKeyDown={e => { if (e.key === 'Escape') { setEditingCell(null) } }}
+                                      rows={4}
+                                      className="w-full px-1 py-0.5 text-[11px] border border-blue-400 rounded focus:outline-none bg-white resize-none"
+                                    />
+                                  ) : (
+                                    <input
+                                      autoFocus
+                                      value={editValue}
+                                      onChange={e => setEditValue(e.target.value)}
+                                      onBlur={() => saveCell(originalIdx, ci, editValue, h)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') { e.preventDefault(); saveCell(originalIdx, ci, editValue, h) }
+                                        if (e.key === 'Escape') { setEditingCell(null) }
+                                      }}
+                                      className="w-full px-1 py-0.5 text-[11px] border border-blue-400 rounded focus:outline-none bg-white"
+                                    />
+                                  )
+                                ) : is紹介文 ? (
                                   <div>
                                     <p className={clsx('text-gray-700 leading-relaxed whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}>
                                       {val}
                                     </p>
                                     {hasMore && (
-                                      <button onClick={() => toggleCell(cellKey)}
+                                      <button onClick={e => { e.stopPropagation(); toggleCell(cellKey) }}
                                         className="mt-0.5 text-[10px] text-blue-400 hover:text-blue-600 transition-colors">
                                         {expanded ? '▲ 閉じる' : '▼ 続きを見る'}
                                       </button>
