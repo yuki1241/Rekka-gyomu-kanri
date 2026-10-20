@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const email = searchParams.get('email') // 特定メンバーのemailまたはnull(全体)
+  const email = searchParams.get('email')
 
   const supabase = createServerSupabase()
   const now = new Date()
@@ -17,14 +17,22 @@ export async function GET(req: NextRequest) {
   // 1. ディレクター案件
   let casesQuery = supabase
     .from('director_cases')
-    .select('id, sales_estimate, case_status, is_archived, director_email, sales_email, case_stage, updated_at')
+    .select('id, case_name, client_name, sales_estimate, case_status, is_archived, director_email, sales_email, case_stage, updated_at')
   if (email) {
     casesQuery = casesQuery.or(`director_email.eq.${email},sales_email.eq.${email}`)
   }
   const { data: cases } = await casesQuery
 
-  const activeCases = (cases ?? []).filter(c => !c.is_archived)
+  const allCases = cases ?? []
+  const activeCases = allCases.filter(c => !c.is_archived)
   const salesEstimateTotal = activeCases.reduce((sum, c) => sum + (c.sales_estimate ?? 0), 0)
+
+  const cancellationCases = activeCases.filter(c =>
+    typeof c.case_status === 'string' && c.case_status.includes('解約')
+  )
+  const activeRunningCases = activeCases.filter(c =>
+    !c.case_status || c.case_status === '稼働中' || c.case_status === '対応中'
+  )
 
   const stageBreakdown: Record<string, number> = {}
   for (const c of activeCases) {
@@ -35,7 +43,7 @@ export async function GET(req: NextRequest) {
   // 2. 見込みリスト
   let prospectsQuery = supabase
     .from('prospect_clients')
-    .select('id, status, amount, user_email, company_name, term, contracted_at')
+    .select('id, status, amount, user_email, company_name, contact_name, term, contracted_at')
   if (email) prospectsQuery = prospectsQuery.eq('user_email', email)
   const { data: prospects } = await prospectsQuery
 
@@ -47,6 +55,10 @@ export async function GET(req: NextRequest) {
     .filter(p => p.status === '成約')
     .reduce((sum, p) => sum + (p.amount ?? 0), 0)
 
+  const newContractsThisMonth = allProspects.filter(p =>
+    p.status === '成約' && typeof p.contracted_at === 'string' && p.contracted_at.startsWith(currentMonth)
+  ).length
+
   const contractDetails = allProspects
     .filter(p => p.status === '成約')
     .map(p => ({
@@ -55,6 +67,7 @@ export async function GET(req: NextRequest) {
       monthly_amount: p.amount ?? 0,
       total_amount: (p.term ?? 0) * (p.amount ?? 0),
       contracted_at: p.contracted_at ?? '',
+      user_email: p.user_email ?? '',
     }))
     .sort((a, b) => b.contracted_at.localeCompare(a.contracted_at))
 
@@ -73,8 +86,41 @@ export async function GET(req: NextRequest) {
       s + (item.amount ?? (item.quantity ?? 0) * (item.unit_price ?? 0)), 0)
   }, 0)
 
+  // 可視化指標用詳細リスト
+  const newContractsDetails = allProspects
+    .filter(p => p.status === '成約' && typeof p.contracted_at === 'string' && p.contracted_at.startsWith(currentMonth))
+    .map(p => ({ company_name: p.company_name ?? '', amount: p.amount ?? 0, user_email: p.user_email ?? '' }))
+
+  const activeRunningDetails = activeRunningCases.map(c => ({
+    case_name: c.case_name ?? '',
+    client_name: c.client_name ?? '',
+    director_email: c.director_email ?? '',
+    sales_email: c.sales_email ?? '',
+    sales_estimate: c.sales_estimate ?? 0,
+  }))
+
+  const cancellationDetails = cancellationCases.map(c => ({
+    case_name: c.case_name ?? '',
+    client_name: c.client_name ?? '',
+    case_status: c.case_status ?? '',
+    director_email: c.director_email ?? '',
+    sales_email: c.sales_email ?? '',
+  }))
+
+  const prospectsDetails = allProspects
+    .filter(p => p.status === '見込み')
+    .map(p => ({
+      company_name: p.company_name ?? '',
+      contact_name: p.contact_name ?? '',
+      amount: p.amount ?? 0,
+      user_email: p.user_email ?? '',
+    }))
+
   return NextResponse.json({
     activeCasesCount: activeCases.length,
+    activeRunningCount: activeRunningCases.length,
+    cancellationCount: cancellationCases.length,
+    newContractsThisMonth,
     salesEstimateTotal,
     contractsCount,
     prospectsCount,
@@ -84,5 +130,9 @@ export async function GET(req: NextRequest) {
     stageBreakdown,
     currentMonth,
     contractDetails,
+    newContractsDetails,
+    activeRunningDetails,
+    cancellationDetails,
+    prospectsDetails,
   })
 }

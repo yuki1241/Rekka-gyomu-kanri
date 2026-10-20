@@ -7,11 +7,12 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, CheckSquare, FolderOpen, Calendar, Receipt,
   Phone, Target, BarChart2, Users, TrendingUp,
-  PieChart, UserCog, LogOut, HardDrive, Flame, ClipboardList, Lightbulb, Network, Briefcase, Building2,
+  PieChart, UserCog, LogOut, HardDrive, Flame, ClipboardList, Lightbulb, Network, Briefcase, Building2, Activity, List,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const menuItems = [
+  { href: '/cases', label: '案件一覧', icon: List },
   { href: '/', label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/tasks', label: 'タスク', icon: CheckSquare },
   { href: '/projects', label: 'プロジェクト', icon: FolderOpen },
@@ -19,7 +20,8 @@ const menuItems = [
   { href: '/expenses', label: '経費精算', icon: Receipt },
   { href: '/appointments', label: 'アポ管理', icon: Phone },
   { href: '/contacts', label: '人脈リスト', icon: Network },
-  { href: '/company-dashboard', label: '会社管理ダッシュボード', icon: Building2 },
+  { href: '/company-dashboard', label: '数値管理', icon: Building2 },
+  { href: '/metrics', label: '可視化指標', icon: Activity },
   { href: '/finance', label: '見込みリスト', icon: Target },
   { href: '/report', label: '個人レポート', icon: BarChart2 },
   { href: '/members', label: 'メンバー', icon: Users },

@@ -2,16 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Building2, TrendingUp, Users, FileText, Banknote, RefreshCw } from 'lucide-react'
+import { Building2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const PERSON_NAMES = ['全体', '原', '菅野', '久保田', '太附']
 const NEW_CASE_STAGES = ['人選中', 'スキルシート提出', '面談', '面談完了', 'トライアル待ち', '本契約']
 
-interface Member {
-  id: string
-  name: string
-  email: string
-}
+interface Member { id: string; name: string; email: string }
 
 interface ContractDetail {
   company_name: string
@@ -19,6 +15,7 @@ interface ContractDetail {
   monthly_amount: number
   total_amount: number
   contracted_at: string
+  user_email: string
 }
 
 interface DashboardData {
@@ -34,36 +31,23 @@ interface DashboardData {
   contractDetails: ContractDetail[]
 }
 
-function fmt(n: number) {
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}万円`
-  return `${n.toLocaleString()}円`
+// ¥XX,XXX 形式
+function fmtYen(n: number) {
+  return `¥${n.toLocaleString('ja-JP')}`
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  color,
-}: {
-  label: string
-  value: string
-  sub?: string
-  icon: React.ElementType
-  color: string
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-xs text-gray-500 font-medium">{label}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon size={16} className="text-white" />
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-gray-800">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-    </div>
-  )
+// 〇万円 形式（サマリ用）
+function fmtMan(n: number) {
+  if (n === 0) return '¥0'
+  if (n >= 100000000) return `${(n / 100000000).toFixed(1)}億円`
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万円`
+  return fmtYen(n)
+}
+
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function CompanyDashboardPage() {
@@ -72,6 +56,7 @@ export default function CompanyDashboardPage() {
   const [selected, setSelected] = useState('全体')
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [viewMonth, setViewMonth] = useState('')
 
   useEffect(() => {
     fetch('/api/members')
@@ -89,7 +74,10 @@ export default function CompanyDashboardPage() {
     }
     fetch(url)
       .then(r => r.json())
-      .then((d: DashboardData) => setData(d))
+      .then((d: DashboardData) => {
+        setData(d)
+        setViewMonth(prev => prev || d.currentMonth)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [members])
@@ -99,21 +87,37 @@ export default function CompanyDashboardPage() {
     load(selected)
   }, [session, selected, load])
 
-  const stageOrder = NEW_CASE_STAGES.filter(s => (data?.stageBreakdown[s] ?? 0) > 0)
-  const totalStage = stageOrder.reduce((sum, s) => sum + (data?.stageBreakdown[s] ?? 0), 0)
+  // 表示月のデータ
+  const monthContracts = (data?.contractDetails ?? []).filter(c =>
+    c.contracted_at && c.contracted_at.startsWith(viewMonth)
+  )
+  const monthMonthlyTotal = monthContracts.reduce((s, c) => s + c.monthly_amount, 0)
+  const monthFinalTotal = monthContracts.reduce((s, c) =>
+    s + (c.total_amount > 0 ? c.total_amount : c.monthly_amount), 0)
+
+  // 全体合計
+  const grandTotal = (data?.contractDetails ?? []).reduce((s, c) =>
+    s + (c.total_amount > 0 ? c.total_amount : c.monthly_amount), 0)
 
   const totalProspects = (data?.contractsCount ?? 0) + (data?.prospectsCount ?? 0) + (data?.lostCount ?? 0)
+  const totalStage = NEW_CASE_STAGES.reduce((s, st) => s + (data?.stageBreakdown[st] ?? 0), 0)
+
+  // 表示月ラベル（例: 2026/10）
+  const viewLabel = viewMonth ? viewMonth.replace('-', '/') : ''
+  // 今月ラベル（例: 10月）
+  const currentMonthNum = data?.currentMonth?.split('-')[1]?.replace(/^0/, '') ?? ''
+  const canGoNext = viewMonth < (data?.currentMonth ?? '')
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-4xl mx-auto">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
             <Building2 size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-800">会社管理ダッシュボード</h1>
+            <h1 className="text-lg font-bold text-gray-800">数値管理</h1>
             <p className="text-xs text-gray-400">全体の契約・売上・稼働状況</p>
           </div>
         </div>
@@ -143,116 +147,108 @@ export default function CompanyDashboardPage() {
         ))}
       </div>
 
-      {loading && (
-        <div className="text-center py-12 text-gray-400 text-sm">読み込み中...</div>
-      )}
+      {loading && <div className="text-center py-16 text-gray-400 text-sm">読み込み中...</div>}
 
       {!loading && data && (
         <>
-          {/* KPI カード */}
-          <div className="grid grid-cols-2 gap-4 mb-6 sm:grid-cols-4">
-            <KpiCard
-              label="稼働件数"
-              value={`${data.activeCasesCount}件`}
-              sub="現在の有効案件"
-              icon={Users}
-              color="bg-blue-500"
-            />
-            <KpiCard
-              label="売上見込み"
-              value={fmt(data.salesEstimateTotal)}
-              sub="稼働案件の合計"
-              icon={TrendingUp}
-              color="bg-orange-500"
-            />
-            <KpiCard
-              label="成約数"
-              value={`${data.contractsCount}件`}
-              sub={`成約額 ${fmt(data.contractsAmount)}`}
-              icon={FileText}
-              color="bg-green-500"
-            />
-            <KpiCard
-              label="当月請求額"
-              value={fmt(data.monthlyRevenue)}
-              sub={`${data.currentMonth} 集計`}
-              icon={Banknote}
-              color="bg-purple-500"
-            />
+          {/* ① 〇月数値ボックス */}
+          <div className="border border-gray-200 rounded-2xl p-7 mb-5">
+            <p className="text-2xl font-bold text-gray-800 mb-6">
+              {currentMonthNum}月数値
+            </p>
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">稼働件数</p>
+                <p className="text-3xl font-bold text-gray-800">{data.activeCasesCount}<span className="text-base font-normal text-gray-500">件</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">成約数</p>
+                <p className="text-3xl font-bold text-gray-800">{data.contractsCount}<span className="text-base font-normal text-gray-500">件</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">売り上げ見込み</p>
+                <p className="text-3xl font-bold text-gray-800">{fmtMan(data.salesEstimateTotal)}</p>
+              </div>
+            </div>
           </div>
 
-          {/* 個人別：月ごと契約一覧 */}
-          {selected !== '全体' && (() => {
-            if (data.contractDetails.length === 0) return (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 mb-2">成約一覧</h2>
-                <p className="text-xs text-gray-400">成約データなし</p>
-              </div>
-            )
+          {/* ② 月別契約テーブル */}
+          <div className="border border-gray-200 rounded-2xl p-6 mb-3">
+            {/* 月ナビゲーション */}
+            <div className="flex items-center gap-3 mb-5">
+              <button
+                onClick={() => setViewMonth(m => addMonths(m, -1))}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="text-base font-semibold text-gray-800 w-24 text-center">{viewLabel}</span>
+              <button
+                onClick={() => setViewMonth(m => addMonths(m, 1))}
+                disabled={!canGoNext}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 transition-colors disabled:opacity-30"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
 
-            // 月ごとにグループ化
-            const byMonth: Record<string, ContractDetail[]> = {}
-            for (const c of data.contractDetails) {
-              const month = c.contracted_at ? c.contracted_at.slice(0, 7) : '不明'
-              if (!byMonth[month]) byMonth[month] = []
-              byMonth[month].push(c)
-            }
-            const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a))
-            const grandTotal = data.contractDetails.reduce((sum, c) =>
-              sum + (c.total_amount > 0 ? c.total_amount : c.monthly_amount), 0)
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 text-xs text-gray-500 font-medium">契約会社名</th>
+                  {selected === '全体' && (
+                    <th className="text-left py-2 text-xs text-gray-500 font-medium">契約担当者</th>
+                  )}
+                  <th className="text-right py-2 text-xs text-gray-500 font-medium">契約月数</th>
+                  <th className="text-right py-2 text-xs text-gray-500 font-medium">月額料金</th>
+                  <th className="text-right py-2 text-xs text-gray-500 font-medium">最終金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthContracts.length === 0 ? (
+                  <tr>
+                    <td colSpan={selected === '全体' ? 5 : 4} className="py-6 text-center text-xs text-gray-400">この月の成約データなし</td>
+                  </tr>
+                ) : (
+                  monthContracts.map((c, i) => {
+                    const final = c.total_amount > 0 ? c.total_amount : c.monthly_amount
+                    const personName = members.find(m => m.email === c.user_email)?.name ?? c.user_email
+                    return (
+                      <tr key={i} className="border-b border-gray-50">
+                        <td className="py-2.5 text-gray-800">{c.company_name || '—'}</td>
+                        {selected === '全体' && (
+                          <td className="py-2.5 text-gray-600">{personName || '—'}</td>
+                        )}
+                        <td className="py-2.5 text-right text-gray-600">{c.term > 0 ? `${c.term}ヵ月` : '—'}</td>
+                        <td className="py-2.5 text-right text-gray-600">{c.monthly_amount > 0 ? fmtYen(c.monthly_amount) : '—'}</td>
+                        <td className="py-2.5 text-right font-medium text-gray-800">{final > 0 ? fmtYen(final) : '—'}</td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+              {monthContracts.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-300">
+                    <td className="pt-3 text-xs text-gray-400"></td>
+                    {selected === '全体' && <td className="pt-3"></td>}
+                    <td className="pt-3 text-right text-sm font-semibold text-gray-700">合計</td>
+                    <td className="pt-3 text-right font-semibold text-gray-800">{fmtYen(monthMonthlyTotal)}</td>
+                    <td className="pt-3 text-right font-semibold text-gray-800">{fmtYen(monthFinalTotal)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
 
-            return (
-              <div className="mb-4 space-y-4">
-                {months.map(month => {
-                  const rows = byMonth[month]
-                  const monthTotal = rows.reduce((sum, c) =>
-                    sum + (c.total_amount > 0 ? c.total_amount : c.monthly_amount), 0)
-                  const label = month === '不明' ? '不明' : `${month.replace('-', '年')}月`
-                  return (
-                    <div key={month} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-gray-700">{label}</h2>
-                        <span className="text-xs text-gray-400">小計: <span className="font-semibold text-gray-700">{fmt(monthTotal)}</span></span>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-xs text-gray-400 border-b border-gray-100">
-                            <th className="text-left py-1.5 font-medium">契約会社名</th>
-                            <th className="text-right py-1.5 font-medium">契約月数</th>
-                            <th className="text-right py-1.5 font-medium">月額料金</th>
-                            <th className="text-right py-1.5 font-medium">最終金額</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((c, i) => {
-                            const final = c.total_amount > 0 ? c.total_amount : c.monthly_amount
-                            return (
-                              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                                <td className="py-2 text-gray-800 font-medium">{c.company_name || '—'}</td>
-                                <td className="py-2 text-right text-gray-600">{c.term > 0 ? `${c.term}ヶ月` : '—'}</td>
-                                <td className="py-2 text-right text-gray-600">{c.monthly_amount > 0 ? fmt(c.monthly_amount) : '—'}</td>
-                                <td className="py-2 text-right font-semibold text-gray-800">{final > 0 ? fmt(final) : '—'}</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )
-                })}
+          {/* ③ 合計売上予想金額 */}
+          <div className="flex items-center justify-between px-4 py-3 mb-5 rounded-xl bg-gray-50 border border-gray-100">
+            <span className="text-sm font-medium text-gray-600">合計売上予想金額</span>
+            <span className="text-lg font-bold text-orange-500">{fmtMan(grandTotal)}</span>
+          </div>
 
-                {/* 合計 */}
-                <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">合計売上予想金額</span>
-                  <span className="text-xl font-bold text-orange-500">{fmt(grandTotal)}</span>
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* 詳細パネル */}
+          {/* ④ 詳細パネル */}
           <div className="grid grid-cols-2 gap-4">
-            {/* 新規案件ステージ */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">新規案件 ステージ別</h2>
               {totalStage === 0 ? (
@@ -269,10 +265,7 @@ export default function CompanyDashboardPage() {
                           <span className="font-medium text-gray-800">{count}件</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-orange-400 rounded-full transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
+                          <div className="h-full bg-orange-400 rounded-full" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     )
@@ -281,7 +274,6 @@ export default function CompanyDashboardPage() {
               )}
             </div>
 
-            {/* 見込みリスト パイプライン */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">見込みリスト パイプライン</h2>
               {totalProspects === 0 ? (
@@ -301,10 +293,7 @@ export default function CompanyDashboardPage() {
                           <span className="font-medium text-gray-800">{count}件 ({pct}%)</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${color} rounded-full transition-all`}
-                            style={{ width: `${pct}%` }}
-                          />
+                          <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     )
