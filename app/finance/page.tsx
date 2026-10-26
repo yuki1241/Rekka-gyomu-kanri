@@ -361,8 +361,17 @@ function ProspectForm({ initial, onSave, onCancel }: {
         </div>
         <div>
           <label className="text-[10px] font-semibold text-gray-500 mb-1 block">金額（円）</label>
-          <input type="number" value={form.amount ?? ''} onChange={(e) => set('amount', e.target.value)}
-            placeholder="500000" className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300" />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={form.amount != null && String(form.amount) !== '' ? Number(form.amount).toLocaleString('ja-JP') : ''}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/,/g, '')
+              if (raw === '' || /^\d+$/.test(raw)) set('amount', raw)
+            }}
+            placeholder="500,000"
+            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-orange-300"
+          />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-3">
